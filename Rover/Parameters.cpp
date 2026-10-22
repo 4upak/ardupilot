@@ -749,8 +749,11 @@ void Rover::load_parameters(void)
 
     AP_Param::set_default_by_name("SERVO1_TRIM", 1500);
     AP_Param::set_default_by_name("SERVO2_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO3_MIN", 1000);
     AP_Param::set_default_by_name("SERVO3_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO3_MAX", 2000);
     AP_Param::set_default_by_name("SERVO4_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO_RATE", 50);
 
     if (is_balancebot()) {
         g2.crash_angle.set_default(30);

@@ -221,6 +221,12 @@ bool AP_Arming_Rover::parameter_checks(bool report)
         return false;
     }
 
+    if (rover.g2.cfmoto_dbw.steering_controller_enabled() &&
+        !SRV_Channels::function_assigned(SRV_Channel::k_steering)) {
+        check_failed(Check::PARAMETERS, report, "ATV steering output not assigned");
+        return false;
+    }
+
     return true;
 }
 

@@ -13,6 +13,7 @@ public:
     void init();
     void setup_failsafe() const;
     void update(bool armed, bool failsafe, float throttle_pct, float ground_speed);
+    [[nodiscard]] bool steering_controller_enabled() const;
 
 private:
     enum class Gear : uint8_t {
@@ -51,6 +52,8 @@ private:
     AP_Int16 _dio_neutral;
     AP_Int16 _dio_high;
     AP_Int16 _dio_low;
+    AP_Int8 _steering_controller_enable;
+    AP_Int16 _steering_failsafe_pwm;
     Gear _selected_gear;
     Gear _telemetry_gear = Gear::unknown;
     AP_HAL::UARTDriver *_telemetry_uart = nullptr;

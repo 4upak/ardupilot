@@ -16,6 +16,14 @@ void Rover::set_servos(void)
         const bool drive_enabled = arming.is_armed() && hal.util->get_soft_armed();
         const bool failsafe_active = failsafe.bits != 0;
         const float dbw_throttle = g2.motors.get_throttle();
+
+        // The external Arduino controller closes the steering position loop
+        // locally. Command its calibrated centre whenever drive is disabled
+        // or a Rover failsafe is active. The IO failsafe is configured
+        // separately in CFMotoDBW::setup_failsafe() for an FMU failure.
+        if (g2.cfmoto_dbw.steering_controller_enabled() && (!drive_enabled || failsafe_active)) {
+            g2.motors.set_steering(0.0f);
+        }
         g2.cfmoto_dbw.update(drive_enabled,
                              failsafe_active,
                              dbw_throttle,
