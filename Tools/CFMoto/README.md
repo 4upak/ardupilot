@@ -18,6 +18,8 @@ proof that a mechanism is safe to move.
 All relays default OFF.  Assign operator RC channels only after confirming the
 final transmitter layout.  Do not copy the legacy RC1/RC3 assignments: those
 channels are steering and throttle in the current Rover input map.
+Because the relay GPIOs share pins with MAIN5/6 and AUX1..4, keep
+`SERVO5/6_FUNCTION` and `SERVO9..12_FUNCTION` set to `-1`.
 
 ## Gearbox reference positions
 

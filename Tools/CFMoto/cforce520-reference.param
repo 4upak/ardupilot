@@ -67,6 +67,14 @@ SERVO_RATE,50
 # Six vehicle relays, all default OFF.
 # 1 ignition; 2 starter; 3 headlights; 4 EW payload;
 # 5 differential lock; 6 four-wheel drive.
+# Their shared servo functions must stay disabled so the GPIOs are not driven
+# simultaneously by SRV_Channel and AP_Relay.
+SERVO5_FUNCTION,-1
+SERVO6_FUNCTION,-1
+SERVO9_FUNCTION,-1
+SERVO10_FUNCTION,-1
+SERVO11_FUNCTION,-1
+SERVO12_FUNCTION,-1
 RELAY1_FUNCTION,1
 RELAY1_PIN,50
 RELAY1_DEFAULT,0

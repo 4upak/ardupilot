@@ -787,6 +787,14 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("RELAY6_FUNCTION", 1);
     AP_Param::set_default_by_name("RELAY6_PIN", 106);
     AP_Param::set_default_by_name("RELAY6_DEFAULT", 0);
+    // Relay GPIOs share physical pins with these servo outputs. Disable the
+    // servo functions so AP_Relay owns the pins without an output conflict.
+    AP_Param::set_default_by_name("SERVO5_FUNCTION", -1);
+    AP_Param::set_default_by_name("SERVO6_FUNCTION", -1);
+    AP_Param::set_default_by_name("SERVO9_FUNCTION", -1);
+    AP_Param::set_default_by_name("SERVO10_FUNCTION", -1);
+    AP_Param::set_default_by_name("SERVO11_FUNCTION", -1);
+    AP_Param::set_default_by_name("SERVO12_FUNCTION", -1);
 
     // Reserve AUX5/AUX6 as GPIO frequency inputs, matching the recovered
     // CFMOTO installation. Sensor identity must be verified on the vehicle.
