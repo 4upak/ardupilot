@@ -57,6 +57,7 @@ private:
     uint32_t _last_telemetry_ms = 0;
     uint8_t _telemetry_buffer[24]{};
     uint8_t _telemetry_offset = 0;
+    bool _throttle_release_required = true;
 
     static constexpr uint16_t PWM_MIN = 800;
     static constexpr uint16_t PWM_MAX = 2200;

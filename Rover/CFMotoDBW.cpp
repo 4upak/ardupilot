@@ -274,7 +274,9 @@ bool CFMotoDBW::gear_allows_throttle() const
     const bool drive_gear_selected = _selected_gear == Gear::reverse ||
                                      _selected_gear == Gear::high ||
                                      _selected_gear == Gear::low;
-    return drive_gear_selected && gear_feedback_matches();
+    return drive_gear_selected &&
+           !_throttle_release_required &&
+           gear_feedback_matches();
 }
 
 bool CFMotoDBW::telemetry_enabled() const
@@ -346,7 +348,7 @@ CFMotoDBW::Outputs CFMotoDBW::active_outputs(float throttle_pct) const
     const float deadzone = constrain_float(_throttle_deadzone.get(), 0.0f, 30.0f);
     Outputs outputs{gas_idle, brake_release, gear_pwm(_selected_gear)};
 
-    if (!gear_feedback_matches()) {
+    if (_throttle_release_required || !gear_feedback_matches()) {
         outputs.brake_pwm = constrained_pwm(_brake_hold_pwm);
         return outputs;
     }
@@ -446,12 +448,14 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
     update_telemetry();
 
     if (_enable.get() == 0) {
+        _throttle_release_required = true;
         _selected_gear = Gear::neutral;
         write_outputs(safe_outputs());
         return;
     }
 
     if (!armed) {
+        _throttle_release_required = true;
         // Do not command a gearbox shift merely because the vehicle was
         // disarmed while it was still moving.
         const bool stopped = fabsf(ground_speed) <= MAX(_shift_speed_max.get(), 0.0f);
@@ -463,6 +467,7 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
     }
 
     if (failsafe) {
+        _throttle_release_required = true;
         write_outputs(safe_outputs());
         return;
     }
@@ -473,6 +478,14 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
     const bool speed_allows_shift = fabsf(ground_speed) <= MAX(_shift_speed_max.get(), 0.0f);
     if (requested != _selected_gear && throttle_is_neutral && speed_allows_shift) {
         _selected_gear = requested;
+        _throttle_release_required = true;
+    }
+
+    // Require a neutral throttle command after arming, failsafe recovery or
+    // a gearbox change. This prevents motion from resuming automatically
+    // when feedback or the radio link returns.
+    if (_throttle_release_required && throttle_is_neutral && gear_feedback_matches()) {
+        _throttle_release_required = false;
     }
 
     write_outputs(active_outputs(constrain_float(throttle_pct, -100.0f, 100.0f)));
