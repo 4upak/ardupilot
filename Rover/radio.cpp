@@ -43,6 +43,7 @@ void Rover::set_control_channels(void)
         g2.motors.setup_servo_output();
         // For a rover safety is TRIM throttle
         g2.motors.setup_safety_output();
+        g2.cfmoto_dbw.setup_failsafe();
     }
     // setup correct scaling for ESCs like the UAVCAN ESCs which
     // take a proportion of speed. Default to 1000 to 2000 for systems without

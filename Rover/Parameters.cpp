@@ -671,6 +671,10 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("GUID_TIMEOUT", 62, ParametersG2, guided_timeout, 3.0),
 
+    // @Group: ATV_
+    // @Path: CFMotoDBW.cpp
+    AP_SUBGROUPINFO(cfmoto_dbw, "ATV_", 63, ParametersG2, CFMotoDBW),
+
     AP_GROUPEND
 };
 
@@ -681,6 +685,7 @@ ParametersG2::ParametersG2(void)
 #endif
     wheel_rate_control(wheel_encoder),
     motors(wheel_rate_control),
+    cfmoto_dbw(),
     attitude_control(),
     smart_rtl(),
 #if HAL_PROXIMITY_ENABLED
@@ -737,8 +742,15 @@ void Rover::load_parameters(void)
 
     AP_Param::set_frame_type_flags(AP_PARAM_FRAME_ROVER);
 
-    SRV_Channels::set_default_function(CH_1, SRV_Channel::k_steering);
-    SRV_Channels::set_default_function(CH_3, SRV_Channel::k_throttle);
+    SRV_Channels::set_default_function(CH_1, SRV_Channel::k_scripting1);
+    SRV_Channels::set_default_function(CH_2, SRV_Channel::k_scripting2);
+    SRV_Channels::set_default_function(CH_3, SRV_Channel::k_steering);
+    SRV_Channels::set_default_function(CH_4, SRV_Channel::k_scripting3);
+
+    AP_Param::set_default_by_name("SERVO1_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO2_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO3_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO4_TRIM", 1500);
 
     if (is_balancebot()) {
         g2.crash_angle.set_default(30);

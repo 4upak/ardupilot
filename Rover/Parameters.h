@@ -3,6 +3,7 @@
 #include <AP_Common/AP_Common.h>
 
 #include "RC_Channel_Rover.h"
+#include "CFMotoDBW.h"
 #include <AC_Avoidance/AC_Avoid.h>
 #include "AC_Sprayer/AC_Sprayer.h"
 #include <AP_AIS/AP_AIS.h>
@@ -296,6 +297,9 @@ public:
 
     // Motor library
     AP_MotorsUGV motors;
+
+    // CFMOTO CFORCE drive-by-wire coordinator
+    CFMotoDBW cfmoto_dbw;
 
     // steering and throttle controller
     AR_AttitudeControl attitude_control;
