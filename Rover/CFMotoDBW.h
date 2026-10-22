@@ -13,6 +13,8 @@ public:
     void init();
     void setup_failsafe() const;
     void update(bool armed, bool failsafe, float throttle_pct, float ground_speed);
+    [[nodiscard]] bool enabled() const;
+    [[nodiscard]] bool pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const;
     [[nodiscard]] bool steering_controller_enabled() const;
 
 private:

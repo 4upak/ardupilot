@@ -244,7 +244,16 @@ bool AP_Arming_Rover::mode_checks(bool report)
 // check motors are ready
 bool AP_Arming_Rover::motor_checks(bool report)
 {
-    bool ret = rover.g2.motors.pre_arm_check(report);
+    bool ret = true;
+    if (rover.g2.cfmoto_dbw.enabled() || rover.g2.cfmoto_dbw.steering_controller_enabled()) {
+        char failure_msg[50] = {};
+        if (!rover.g2.cfmoto_dbw.pre_arm_check(failure_msg, ARRAY_SIZE(failure_msg))) {
+            check_failed(report, "CFMoto: %s", failure_msg);
+            ret = false;
+        }
+    } else {
+        ret = rover.g2.motors.pre_arm_check(report);
+    }
 
 #if HAL_TORQEEDO_ENABLED
     char failure_msg[50] = {};

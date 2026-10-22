@@ -747,12 +747,18 @@ void Rover::load_parameters(void)
     SRV_Channels::set_default_function(CH_3, SRV_Channel::k_steering);
     SRV_Channels::set_default_function(CH_4, SRV_Channel::k_scripting3);
 
+    AP_Param::set_default_by_name("SERVO1_MIN", 988);
     AP_Param::set_default_by_name("SERVO1_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO1_MAX", 2012);
+    AP_Param::set_default_by_name("SERVO2_MIN", 988);
     AP_Param::set_default_by_name("SERVO2_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO2_MAX", 2012);
     AP_Param::set_default_by_name("SERVO3_MIN", 1000);
     AP_Param::set_default_by_name("SERVO3_TRIM", 1500);
     AP_Param::set_default_by_name("SERVO3_MAX", 2000);
+    AP_Param::set_default_by_name("SERVO4_MIN", 988);
     AP_Param::set_default_by_name("SERVO4_TRIM", 1500);
+    AP_Param::set_default_by_name("SERVO4_MAX", 2012);
     AP_Param::set_default_by_name("SERVO_RATE", 50);
 
     if (is_balancebot()) {

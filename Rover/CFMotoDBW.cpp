@@ -6,6 +6,8 @@
 #include <RC_Channel/RC_Channel.h>
 #include <SRV_Channel/SRV_Channel.h>
 
+extern const AP_HAL::HAL& hal;
+
 const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Param: ENABLE
     // @DisplayName: CFMOTO drive-by-wire enable
@@ -298,6 +300,71 @@ bool CFMotoDBW::gear_allows_throttle() const
 bool CFMotoDBW::telemetry_enabled() const
 {
     return _telemetry_enable.get() != 0;
+}
+
+bool CFMotoDBW::enabled() const
+{
+    return _enable.get() != 0;
+}
+
+bool CFMotoDBW::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
+{
+    if (!enabled()) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "ATV_ENABLE disabled");
+        return false;
+    }
+
+    const struct {
+        SRV_Channel::Function function;
+        const char *name;
+    } required_outputs[] {
+        { SRV_Channel::k_scripting1, "gas" },
+        { SRV_Channel::k_scripting2, "brake" },
+        { SRV_Channel::k_steering, "steering" },
+        { SRV_Channel::k_scripting3, "gearbox" },
+    };
+    for (const auto &output : required_outputs) {
+        if (!SRV_Channels::function_assigned(output.function)) {
+            hal.util->snprintf(failure_msg, failure_msg_len, "%s output missing", output.name);
+            return false;
+        }
+    }
+
+    if (constrained_pwm(_gas_idle_pwm) == constrained_pwm(_gas_max_pwm)) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "gas PWM not calibrated");
+        return false;
+    }
+    if (constrained_pwm(_brake_release_pwm) == constrained_pwm(_brake_hold_pwm)) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "brake PWM not calibrated");
+        return false;
+    }
+
+    const uint16_t gear_positions[] {
+        constrained_pwm(_gear_park_pwm),
+        constrained_pwm(_gear_reverse_pwm),
+        constrained_pwm(_gear_neutral_pwm),
+        constrained_pwm(_gear_high_pwm),
+        constrained_pwm(_gear_low_pwm),
+    };
+    for (uint8_t i = 0; i < ARRAY_SIZE(gear_positions); i++) {
+        for (uint8_t j = i + 1; j < ARRAY_SIZE(gear_positions); j++) {
+            if (gear_positions[i] == gear_positions[j]) {
+                hal.util->snprintf(failure_msg, failure_msg_len, "gear PWM not calibrated");
+                return false;
+            }
+        }
+    }
+
+    const int8_t gear_channel = _gear_rc_channel.get();
+    if (gear_channel < 1 || gear_channel > 16) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "gear RC channel invalid");
+        return false;
+    }
+    if (telemetry_enabled() && !telemetry_healthy()) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "gear telemetry unhealthy");
+        return false;
+    }
+    return true;
 }
 
 bool CFMotoDBW::steering_controller_enabled() const

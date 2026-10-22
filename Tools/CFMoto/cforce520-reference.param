@@ -1,0 +1,60 @@
+# CFMOTO CFORCE 520L recovered hardware profile.
+# Bench-test only: actuator power disconnected while loading and validating.
+
+# Keep DBW disabled until gas, brake, steering and gearbox are verified.
+ATV_ENABLE,0
+
+# Legacy five-position gearbox calibration; presumed P/R/N/H/L order.
+ATV_GEAR_P,1000
+ATV_GEAR_R,1225
+ATV_GEAR_N,1500
+ATV_GEAR_H,1725
+ATV_GEAR_L,2000
+
+# Verified legacy actuator output envelope.  Steering remains 1000..2000.
+SERVO1_MIN,988
+SERVO1_TRIM,1500
+SERVO1_MAX,2012
+SERVO2_MIN,988
+SERVO2_TRIM,1500
+SERVO2_MAX,2012
+SERVO3_MIN,1000
+SERVO3_TRIM,1500
+SERVO3_MAX,2000
+SERVO4_MIN,988
+SERVO4_TRIM,1500
+SERVO4_MAX,2012
+SERVO_RATE,50
+
+# Six vehicle relays, all default OFF.
+# 1 ignition; 2 starter; 3 headlights; 4 EW payload;
+# 5 differential lock; 6 four-wheel drive.
+RELAY1_FUNCTION,1
+RELAY1_PIN,50
+RELAY1_DEFAULT,0
+RELAY2_FUNCTION,1
+RELAY2_PIN,51
+RELAY2_DEFAULT,0
+RELAY3_FUNCTION,1
+RELAY3_PIN,52
+RELAY3_DEFAULT,0
+RELAY4_FUNCTION,1
+RELAY4_PIN,53
+RELAY4_DEFAULT,0
+RELAY5_FUNCTION,1
+RELAY5_PIN,105
+RELAY5_DEFAULT,0
+RELAY6_FUNCTION,1
+RELAY6_PIN,106
+RELAY6_DEFAULT,0
+
+# Recovered RPM inputs.  Verify sensor identity and scaling on the vehicle.
+RPM1_TYPE,2
+RPM1_PIN,54
+RPM1_SCALING,0.00058
+RPM2_TYPE,2
+RPM2_PIN,55
+RPM2_SCALING,1
+
+# ELRS 420 kbaud and require idle throttle before arming.
+RC_OPTIONS,8224
