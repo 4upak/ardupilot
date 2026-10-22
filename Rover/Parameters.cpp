@@ -767,6 +767,23 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("RC_OPTIONS", 8224);
     AP_Param::set_default_by_name("RSSI_TYPE", 3);
 
+    // Reserve AUX5/AUX6 as GPIO frequency inputs, matching the recovered
+    // CFMOTO installation. Sensor identity must be verified on the vehicle.
+    AP_Param::set_default_by_name("SERVO13_FUNCTION", -1);
+    AP_Param::set_default_by_name("SERVO14_FUNCTION", -1);
+    AP_Param::set_default_by_name("RPM1_TYPE", 2);
+    AP_Param::set_default_by_name("RPM1_PIN", 54);
+    AP_Param::set_default_by_name("RPM1_SCALING", 0.00058f);
+    AP_Param::set_default_by_name("RPM1_MIN", 0.5f);
+    AP_Param::set_default_by_name("RPM1_MAX", 100000);
+    AP_Param::set_default_by_name("RPM1_MIN_QUAL", 0);
+    AP_Param::set_default_by_name("RPM2_TYPE", 2);
+    AP_Param::set_default_by_name("RPM2_PIN", 55);
+    AP_Param::set_default_by_name("RPM2_SCALING", 1);
+    AP_Param::set_default_by_name("RPM2_MIN", 10);
+    AP_Param::set_default_by_name("RPM2_MAX", 100000);
+    AP_Param::set_default_by_name("RPM2_MIN_QUAL", 0);
+
     if (is_balancebot()) {
         g2.crash_angle.set_default(30);
     }

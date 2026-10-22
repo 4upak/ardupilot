@@ -48,13 +48,21 @@ RELAY6_FUNCTION,1
 RELAY6_PIN,106
 RELAY6_DEFAULT,0
 
-# Recovered RPM inputs.  Verify sensor identity and scaling on the vehicle.
+# Recovered frequency inputs. AUX5/AUX6 must remain GPIO, not PWM outputs.
+SERVO13_FUNCTION,-1
+SERVO14_FUNCTION,-1
 RPM1_TYPE,2
 RPM1_PIN,54
 RPM1_SCALING,0.00058
+RPM1_MIN,0.5
+RPM1_MAX,100000
+RPM1_MIN_QUAL,0
 RPM2_TYPE,2
 RPM2_PIN,55
 RPM2_SCALING,1
+RPM2_MIN,10
+RPM2_MAX,100000
+RPM2_MIN_QUAL,0
 
 # ELRS/CRSF receiver on TELEM1 (SERIAL1). Baud is managed automatically.
 SERIAL1_PROTOCOL,23
