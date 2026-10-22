@@ -60,6 +60,7 @@ void Rover::init_ardupilot()
 
     init_rc_in();            // sets up rc channels deadzone
     g2.motors.init(get_frame_type());        // init motors including setting servo out channels ranges
+    g2.cfmoto_dbw.init();
     AP::srv().enable_aux_servos();
 
     // init wheel encoders

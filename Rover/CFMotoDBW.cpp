@@ -1,6 +1,8 @@
 #include "CFMotoDBW.h"
 
+#include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
+#include <AP_SerialManager/AP_SerialManager.h>
 #include <RC_Channel/RC_Channel.h>
 #include <SRV_Channel/SRV_Channel.h>
 
@@ -119,6 +121,70 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("THR_DZ", 13, CFMotoDBW, _throttle_deadzone, 5.0),
 
+    // @Param: TLM_EN
+    // @DisplayName: Gearbox telemetry enable
+    // @Description: Enables gearbox position feedback from the Arduino Nano binary protocol. Configure the connected serial port as CFMoto Gearbox at 115200 baud before enabling.
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
+    AP_GROUPINFO("TLM_EN", 14, CFMotoDBW, _telemetry_enable, 0),
+
+    // @Param: TLM_TMO
+    // @DisplayName: Gearbox telemetry timeout
+    // @Description: Maximum age of a valid gearbox telemetry packet. Gas is inhibited and the brake is held when feedback is stale or invalid.
+    // @Units: ms
+    // @Range: 250 5000
+    // @Increment: 50
+    // @User: Standard
+    AP_GROUPINFO("TLM_TMO", 15, CFMotoDBW, _telemetry_timeout_ms, 750),
+
+    // @Param: DIO_MASK
+    // @DisplayName: Gearbox digital input mask
+    // @Description: Bit mask selecting Arduino digital input bits used to identify gearbox positions. Arduino pin N is represented by bit N. The default selects D3 through D7.
+    // @Range: 0 16383
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("DIO_MASK", 16, CFMotoDBW, _dio_mask, 248),
+
+    // @Param: DIO_P
+    // @DisplayName: Park digital input pattern
+    // @Description: Expected masked Arduino digital input value for Park. Default assumes D3 is active.
+    // @Range: 0 16383
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("DIO_P", 17, CFMotoDBW, _dio_park, 8),
+
+    // @Param: DIO_R
+    // @DisplayName: Reverse digital input pattern
+    // @Description: Expected masked Arduino digital input value for Reverse. Default assumes D4 is active.
+    // @Range: 0 16383
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("DIO_R", 18, CFMotoDBW, _dio_reverse, 16),
+
+    // @Param: DIO_N
+    // @DisplayName: Neutral digital input pattern
+    // @Description: Expected masked Arduino digital input value for Neutral. Default assumes D5 is active.
+    // @Range: 0 16383
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("DIO_N", 19, CFMotoDBW, _dio_neutral, 32),
+
+    // @Param: DIO_H
+    // @DisplayName: High digital input pattern
+    // @Description: Expected masked Arduino digital input value for High. Default assumes D6 is active.
+    // @Range: 0 16383
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("DIO_H", 20, CFMotoDBW, _dio_high, 64),
+
+    // @Param: DIO_L
+    // @DisplayName: Low digital input pattern
+    // @Description: Expected masked Arduino digital input value for Low. Default assumes D7 is active.
+    // @Range: 0 16383
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("DIO_L", 21, CFMotoDBW, _dio_low, 128),
+
     AP_GROUPEND
 };
 
@@ -126,6 +192,20 @@ CFMotoDBW::CFMotoDBW() :
     _selected_gear(Gear::neutral)
 {
     AP_Param::setup_object_defaults(this, var_info);
+}
+
+void CFMotoDBW::init()
+{
+    if (!telemetry_enabled()) {
+        return;
+    }
+
+    const AP_SerialManager &serial_manager = AP::serialmanager();
+    _telemetry_uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_CFMotoGearbox, 0);
+    if (_telemetry_uart != nullptr) {
+        _telemetry_uart->begin(serial_manager.find_baudrate(AP_SerialManager::SerialProtocol_CFMotoGearbox, 0), 64, 32);
+        _telemetry_uart->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
+    }
 }
 
 uint16_t CFMotoDBW::constrained_pwm(const AP_Int16 &parameter) const
@@ -183,15 +263,71 @@ uint16_t CFMotoDBW::gear_pwm(Gear gear) const
         return constrained_pwm(_gear_high_pwm);
     case Gear::low:
         return constrained_pwm(_gear_low_pwm);
+    case Gear::unknown:
+        break;
     }
     return constrained_pwm(_gear_neutral_pwm);
 }
 
 bool CFMotoDBW::gear_allows_throttle() const
 {
-    return _selected_gear == Gear::reverse ||
-           _selected_gear == Gear::high ||
-           _selected_gear == Gear::low;
+    const bool drive_gear_selected = _selected_gear == Gear::reverse ||
+                                     _selected_gear == Gear::high ||
+                                     _selected_gear == Gear::low;
+    return drive_gear_selected && gear_feedback_matches();
+}
+
+bool CFMotoDBW::telemetry_enabled() const
+{
+    return _telemetry_enable.get() != 0;
+}
+
+bool CFMotoDBW::telemetry_healthy() const
+{
+    if (!telemetry_enabled()) {
+        return true;
+    }
+
+    const uint32_t timeout_ms = static_cast<uint32_t>(constrain_int16(_telemetry_timeout_ms.get(), 250, 5000));
+    return _last_telemetry_ms != 0 &&
+           AP_HAL::millis() - _last_telemetry_ms <= timeout_ms &&
+           _telemetry_gear != Gear::unknown;
+}
+
+bool CFMotoDBW::gear_feedback_matches() const
+{
+    return !telemetry_enabled() ||
+           (telemetry_healthy() && _telemetry_gear == _selected_gear);
+}
+
+CFMotoDBW::Gear CFMotoDBW::decode_gear(uint16_t dio) const
+{
+    const uint16_t mask = static_cast<uint16_t>(constrain_int16(_dio_mask.get(), 0, 16383));
+    if (mask == 0) {
+        return Gear::unknown;
+    }
+
+    const uint16_t value = dio & mask;
+    const struct {
+        Gear gear;
+        uint16_t pattern;
+    } patterns[] {
+        { Gear::park, static_cast<uint16_t>(_dio_park.get()) },
+        { Gear::reverse, static_cast<uint16_t>(_dio_reverse.get()) },
+        { Gear::neutral, static_cast<uint16_t>(_dio_neutral.get()) },
+        { Gear::high, static_cast<uint16_t>(_dio_high.get()) },
+        { Gear::low, static_cast<uint16_t>(_dio_low.get()) },
+    };
+
+    Gear match = Gear::unknown;
+    uint8_t match_count = 0;
+    for (const auto &candidate : patterns) {
+        if (value == (candidate.pattern & mask)) {
+            match = candidate.gear;
+            match_count++;
+        }
+    }
+    return match_count == 1 ? match : Gear::unknown;
 }
 
 CFMotoDBW::Outputs CFMotoDBW::safe_outputs() const
@@ -210,6 +346,11 @@ CFMotoDBW::Outputs CFMotoDBW::active_outputs(float throttle_pct) const
     const float deadzone = constrain_float(_throttle_deadzone.get(), 0.0f, 30.0f);
     Outputs outputs{gas_idle, brake_release, gear_pwm(_selected_gear)};
 
+    if (!gear_feedback_matches()) {
+        outputs.brake_pwm = constrained_pwm(_brake_hold_pwm);
+        return outputs;
+    }
+
     if (throttle_pct > deadzone && gear_allows_throttle()) {
         const float ratio = (throttle_pct - deadzone) / (100.0f - deadzone);
         outputs.gas_pwm = interpolate_pwm(gas_idle, constrained_pwm(_gas_max_pwm), ratio);
@@ -222,6 +363,68 @@ CFMotoDBW::Outputs CFMotoDBW::active_outputs(float throttle_pct) const
         outputs.brake_pwm = constrained_pwm(_brake_hold_pwm);
     }
     return outputs;
+}
+
+void CFMotoDBW::update_telemetry()
+{
+    if (!telemetry_enabled()) {
+        return;
+    }
+    if (_telemetry_uart == nullptr) {
+        init();
+    }
+    if (_telemetry_uart == nullptr) {
+        return;
+    }
+
+    int16_t bytes_available = MIN(_telemetry_uart->available(), 128);
+    while (bytes_available-- > 0) {
+        const int16_t value = _telemetry_uart->read();
+        if (value < 0) {
+            break;
+        }
+        parse_telemetry_byte(static_cast<uint8_t>(value));
+    }
+}
+
+void CFMotoDBW::parse_telemetry_byte(uint8_t byte)
+{
+    if (_telemetry_offset == 0) {
+        if (byte == TELEMETRY_PACKET_ID) {
+            _telemetry_buffer[_telemetry_offset++] = byte;
+        }
+        return;
+    }
+
+    _telemetry_buffer[_telemetry_offset++] = byte;
+    if (_telemetry_offset == 2 && _telemetry_buffer[1] != TELEMETRY_PACKET_LENGTH) {
+        _telemetry_offset = byte == TELEMETRY_PACKET_ID ? 1 : 0;
+        if (_telemetry_offset == 1) {
+            _telemetry_buffer[0] = byte;
+        }
+        return;
+    }
+
+    if (_telemetry_offset < TELEMETRY_PACKET_LENGTH) {
+        return;
+    }
+
+    uint8_t checksum = 0;
+    for (uint8_t i = 0; i < TELEMETRY_PACKET_LENGTH - 1; i++) {
+        checksum += _telemetry_buffer[i];
+    }
+    if (checksum == _telemetry_buffer[TELEMETRY_PACKET_LENGTH - 1]) {
+        accept_telemetry_packet();
+    }
+    _telemetry_offset = 0;
+}
+
+void CFMotoDBW::accept_telemetry_packet()
+{
+    const uint16_t dio = static_cast<uint16_t>(_telemetry_buffer[2]) |
+                         static_cast<uint16_t>(_telemetry_buffer[3]) << 8;
+    _telemetry_gear = decode_gear(dio);
+    _last_telemetry_ms = AP_HAL::millis();
 }
 
 void CFMotoDBW::write_outputs(const Outputs &outputs) const
@@ -240,6 +443,8 @@ void CFMotoDBW::setup_failsafe() const
 
 void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float ground_speed)
 {
+    update_telemetry();
+
     if (_enable.get() == 0) {
         _selected_gear = Gear::neutral;
         write_outputs(safe_outputs());
