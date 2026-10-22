@@ -35,7 +35,21 @@ the real gear through the Nano telemetry before enabling `ATV_ENABLE`.
 
 - RPM inputs used pins 54 and 55.  Identify engine versus driveline input and
   calibrate scaling before using either value in shift interlocks.
-- The ELRS receiver used `RC_OPTIONS=8224`: 420 kbaud plus idle-throttle arming.
+- The ELRS receiver is connected to TELEM1, which is `SERIAL1` on Pixhawk 6C.
+  Configure `SERIAL1_PROTOCOL=23` (RC input), `SERIAL1_OPTIONS=0`,
+  `RSSI_TYPE=3`, and `RC_OPTIONS=8224` (ELRS 420 kbaud plus idle-throttle
+  arming).  ArduPilot controls the UART baud rate automatically for serial RC
+  protocols; `SERIAL1_BAUD` is not used to select 420 kbaud in this mode.
+- Wire the full-duplex CRSF link:
+
+  ```text
+  ELRS TX -> TELEM1 RX
+  ELRS RX -> TELEM1 TX
+  ELRS 5V -> TELEM1 5V
+  ELRS GND -> TELEM1 GND
+  ```
+
+  Verify the receiver's supply requirements before using the TELEM1 5 V rail.
 - The old Pixhawk mounting rotation was roll -90, pitch 0, yaw 180.  Recalibrate
   the actual board instead of copying IMU or compass offsets.
 - Never copy the old `ARMING_REQUIRE=0`, `ARMING_CHECK=0`,

@@ -56,5 +56,9 @@ RPM2_TYPE,2
 RPM2_PIN,55
 RPM2_SCALING,1
 
-# ELRS 420 kbaud and require idle throttle before arming.
+# ELRS/CRSF receiver on TELEM1 (SERIAL1). Baud is managed automatically.
+SERIAL1_PROTOCOL,23
+SERIAL1_OPTIONS,0
+RSSI_TYPE,3
+# Use ELRS 420 kbaud and require idle throttle before arming.
 RC_OPTIONS,8224

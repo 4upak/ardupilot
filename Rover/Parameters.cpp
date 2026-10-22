@@ -761,6 +761,12 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("SERVO4_MAX", 2012);
     AP_Param::set_default_by_name("SERVO_RATE", 50);
 
+    // CFMOTO ELRS receiver is connected to TELEM1 (SERIAL1) using CRSF.
+    AP_Param::set_default_by_name("SERIAL1_PROTOCOL", 23);
+    AP_Param::set_default_by_name("SERIAL1_OPTIONS", 0);
+    AP_Param::set_default_by_name("RC_OPTIONS", 8224);
+    AP_Param::set_default_by_name("RSSI_TYPE", 3);
+
     if (is_balancebot()) {
         g2.crash_angle.set_default(30);
     }
