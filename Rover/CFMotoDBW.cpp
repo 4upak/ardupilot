@@ -2,6 +2,8 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
+#include <AP_Relay/AP_Relay.h>
+#include <AP_RPM/AP_RPM.h>
 #include <AP_SerialManager/AP_SerialManager.h>
 #include <RC_Channel/RC_Channel.h>
 #include <SRV_Channel/SRV_Channel.h>
@@ -149,43 +151,43 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
 
     // @Param: DIO_P
     // @DisplayName: Park digital input pattern
-    // @Description: Expected masked Arduino digital input value for Park. Default assumes D3 is active.
+    // @Description: Expected masked Arduino digital input value for Park. Default assumes D3 is active-low and D4 through D7 are pulled high.
     // @Range: 0 16383
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("DIO_P", 17, CFMotoDBW, _dio_park, 8),
+    AP_GROUPINFO("DIO_P", 17, CFMotoDBW, _dio_park, 240),
 
     // @Param: DIO_R
     // @DisplayName: Reverse digital input pattern
-    // @Description: Expected masked Arduino digital input value for Reverse. Default assumes D4 is active.
+    // @Description: Expected masked Arduino digital input value for Reverse. Default assumes D4 is active-low.
     // @Range: 0 16383
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("DIO_R", 18, CFMotoDBW, _dio_reverse, 16),
+    AP_GROUPINFO("DIO_R", 18, CFMotoDBW, _dio_reverse, 232),
 
     // @Param: DIO_N
     // @DisplayName: Neutral digital input pattern
-    // @Description: Expected masked Arduino digital input value for Neutral. Default assumes D5 is active.
+    // @Description: Expected masked Arduino digital input value for Neutral. Default assumes D5 is active-low.
     // @Range: 0 16383
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("DIO_N", 19, CFMotoDBW, _dio_neutral, 32),
+    AP_GROUPINFO("DIO_N", 19, CFMotoDBW, _dio_neutral, 216),
 
     // @Param: DIO_H
     // @DisplayName: High digital input pattern
-    // @Description: Expected masked Arduino digital input value for High. Default assumes D6 is active.
+    // @Description: Expected masked Arduino digital input value for High. Default assumes D6 is active-low.
     // @Range: 0 16383
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("DIO_H", 20, CFMotoDBW, _dio_high, 64),
+    AP_GROUPINFO("DIO_H", 20, CFMotoDBW, _dio_high, 184),
 
     // @Param: DIO_L
     // @DisplayName: Low digital input pattern
-    // @Description: Expected masked Arduino digital input value for Low. Default assumes D7 is active.
+    // @Description: Expected masked Arduino digital input value for Low. Default assumes D7 is active-low.
     // @Range: 0 16383
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("DIO_L", 21, CFMotoDBW, _dio_low, 128),
+    AP_GROUPINFO("DIO_L", 21, CFMotoDBW, _dio_low, 120),
 
     // @Param: STR_CTRL
     // @DisplayName: External steering controller enable
@@ -202,6 +204,157 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Increment: 1
     // @User: Standard
     AP_GROUPINFO("STR_FS", 23, CFMotoDBW, _steering_failsafe_pwm, 1500),
+
+    // @Param: SH_BRK_MS
+    // @DisplayName: Gear shift brake settling time
+    // @Description: Time to hold idle gas and full service brake before moving the gearbox actuator after speed and RPM are safe.
+    // @Units: ms
+    // @Range: 0 5000
+    // @User: Standard
+    AP_GROUPINFO("SH_BRK_MS", 24, CFMotoDBW, _shift_brake_ms, 750),
+
+    // @Param: SH_STOP_MS
+    // @DisplayName: Gear shift stopped confirmation time
+    // @Description: Continuous time that speed, throttle and optional RPM must remain safe before a gearbox shift starts.
+    // @Units: ms
+    // @Range: 0 5000
+    // @User: Standard
+    AP_GROUPINFO("SH_STOP_MS", 25, CFMotoDBW, _shift_stop_ms, 500),
+
+    // @Param: SH_NEUT_MS
+    // @DisplayName: Gear shift neutral dwell time
+    // @Description: Time to hold confirmed Neutral between two non-Neutral gearbox positions.
+    // @Units: ms
+    // @Range: 0 5000
+    // @User: Standard
+    AP_GROUPINFO("SH_NEUT_MS", 26, CFMotoDBW, _shift_neutral_ms, 500),
+
+    // @Param: SH_TMO
+    // @DisplayName: Gear shift sequence timeout
+    // @Description: Maximum total time for braking, Neutral dwell, actuator movement and feedback confirmation. Timeout latches a shift fault.
+    // @Units: ms
+    // @Range: 500 15000
+    // @User: Standard
+    AP_GROUPINFO("SH_TMO", 27, CFMotoDBW, _shift_timeout_ms, 5000),
+
+    // @Param: SH_RPM_I
+    // @DisplayName: Gear shift RPM input
+    // @Description: RPM sensor instance used as a gearbox shift interlock. Zero disables the RPM interlock until sensor identity is confirmed.
+    // @Values: 0:Disabled,1:RPM1,2:RPM2
+    // @User: Standard
+    AP_GROUPINFO("SH_RPM_I", 28, CFMotoDBW, _shift_rpm_instance, 0),
+
+    // @Param: SH_RPM_MAX
+    // @DisplayName: Maximum RPM for gearbox shift
+    // @Description: Maximum reading from the configured RPM input that permits gearbox actuator movement.
+    // @Units: RPM
+    // @Range: 0 100000
+    // @User: Standard
+    AP_GROUPINFO("SH_RPM_MAX", 29, CFMotoDBW, _shift_rpm_max, 1000),
+
+    // @Param: ENG_EN
+    // @DisplayName: Engine start controller enable
+    // @Description: Enables ignition and starter sequencing on relay 1 and relay 2. Keep disabled until the engine RPM input and relay polarity are verified.
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
+    AP_GROUPINFO("ENG_EN", 30, CFMotoDBW, _engine_enable, 0),
+
+    // @Param: IGN_CH
+    // @DisplayName: Ignition request RC channel
+    // @Description: RC channel requesting ignition ON above 1700 PWM and OFF below 1300 PWM.
+    // @Range: 0 16
+    // @User: Standard
+    AP_GROUPINFO("IGN_CH", 31, CFMotoDBW, _ignition_rc_channel, 12),
+
+    // @Param: START_CH
+    // @DisplayName: Starter request RC channel
+    // @Description: RC channel requesting an automatic start attempt above 1700 PWM. A new attempt requires the switch to be released after a fault.
+    // @Range: 0 16
+    // @User: Standard
+    AP_GROUPINFO("START_CH", 32, CFMotoDBW, _starter_rc_channel, 9),
+
+    // @Param: ENG_RPM_I
+    // @DisplayName: Engine RPM input
+    // @Description: RPM sensor instance used to detect successful engine start. Zero prevents starter operation.
+    // @Values: 0:Disabled,1:RPM1,2:RPM2
+    // @User: Standard
+    AP_GROUPINFO("ENG_RPM_I", 33, CFMotoDBW, _engine_rpm_instance, 0),
+
+    // @Param: ENG_RUN_RPM
+    // @DisplayName: Engine running RPM threshold
+    // @Description: RPM above which the starter is released and the engine is considered running.
+    // @Units: RPM
+    // @Range: 50 10000
+    // @User: Standard
+    AP_GROUPINFO("ENG_RUN_RPM", 34, CFMotoDBW, _engine_running_rpm, 600),
+
+    // @Param: ENG_DLY
+    // @DisplayName: Ignition-to-starter delay
+    // @Description: Delay after ignition is enabled before energising the starter relay.
+    // @Units: ms
+    // @Range: 0 5000
+    // @User: Standard
+    AP_GROUPINFO("ENG_DLY", 35, CFMotoDBW, _engine_start_delay_ms, 500),
+
+    // @Param: ENG_CRANK
+    // @DisplayName: Maximum starter crank time
+    // @Description: Maximum time to energise the starter relay during one attempt.
+    // @Units: ms
+    // @Range: 100 10000
+    // @User: Standard
+    AP_GROUPINFO("ENG_CRANK", 36, CFMotoDBW, _engine_crank_ms, 3000),
+
+    // @Param: ENG_RETRY_D
+    // @DisplayName: Starter retry delay
+    // @Description: Delay between automatic starter attempts.
+    // @Units: ms
+    // @Range: 500 15000
+    // @User: Standard
+    AP_GROUPINFO("ENG_RETRY_D", 37, CFMotoDBW, _engine_retry_delay_ms, 2000),
+
+    // @Param: ENG_RETRIES
+    // @DisplayName: Maximum starter attempts
+    // @Description: Maximum automatic starter attempts before a latched fault. Zero disables retries after the first attempt.
+    // @Range: 0 10
+    // @User: Standard
+    AP_GROUPINFO("ENG_RETRIES", 38, CFMotoDBW, _engine_max_retries, 2),
+
+    // @Param: 4WD_CH
+    // @DisplayName: Four-wheel-drive RC channel
+    // @Description: RC channel requesting relay 6 above 1700 PWM. Zero disables automatic 4WD relay control.
+    // @Range: 0 16
+    // @User: Standard
+    AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 0),
+
+    // @Param: DIFF_CH
+    // @DisplayName: Differential-lock RC channel
+    // @Description: RC channel requesting relay 5 above 1700 PWM. Differential lock is applied only while 4WD is enabled.
+    // @Range: 0 16
+    // @User: Standard
+    AP_GROUPINFO("DIFF_CH", 40, CFMotoDBW, _diff_lock_rc_channel, 0),
+
+    // @Param: AXLE_SPD
+    // @DisplayName: Maximum driveline switch speed
+    // @Description: Maximum absolute vehicle speed for changing 4WD or differential-lock relay state.
+    // @Units: m/s
+    // @Range: 0 5
+    // @User: Standard
+    AP_GROUPINFO("AXLE_SPD", 41, CFMotoDBW, _axle_shift_speed_max, 0.2),
+
+    // @Param: AXLE_RPM_I
+    // @DisplayName: Driveline switch RPM input
+    // @Description: Optional RPM sensor instance used as a 4WD and differential-lock interlock. Zero disables this interlock.
+    // @Values: 0:Disabled,1:RPM1,2:RPM2
+    // @User: Standard
+    AP_GROUPINFO("AXLE_RPM_I", 42, CFMotoDBW, _axle_rpm_instance, 0),
+
+    // @Param: AXLE_RPM
+    // @DisplayName: Maximum driveline switch RPM
+    // @Description: Maximum configured RPM input reading for changing 4WD or differential-lock state.
+    // @Units: RPM
+    // @Range: 0 100000
+    // @User: Standard
+    AP_GROUPINFO("AXLE_RPM", 43, CFMotoDBW, _axle_rpm_max, 500),
 
     AP_GROUPEND
 };
@@ -293,6 +446,7 @@ bool CFMotoDBW::gear_allows_throttle() const
                                      _selected_gear == Gear::high ||
                                      _selected_gear == Gear::low;
     return drive_gear_selected &&
+           !shift_in_progress() &&
            !_throttle_release_required &&
            gear_feedback_matches();
 }
@@ -364,6 +518,24 @@ bool CFMotoDBW::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
         hal.util->snprintf(failure_msg, failure_msg_len, "gear telemetry unhealthy");
         return false;
     }
+    if (_engine_enable.get() != 0) {
+        if (_engine_rpm_instance.get() < 1 || _engine_rpm_instance.get() > 2) {
+            hal.util->snprintf(failure_msg, failure_msg_len, "engine RPM input invalid");
+            return false;
+        }
+        AP_Relay *relay = AP::relay();
+        if (relay == nullptr || !relay->enabled(0) || !relay->enabled(1)) {
+            hal.util->snprintf(failure_msg, failure_msg_len, "engine relays missing");
+            return false;
+        }
+    }
+    if ((_fourwd_rc_channel.get() != 0 || _diff_lock_rc_channel.get() != 0)) {
+        AP_Relay *relay = AP::relay();
+        if (relay == nullptr || !relay->enabled(4) || !relay->enabled(5)) {
+            hal.util->snprintf(failure_msg, failure_msg_len, "driveline relays missing");
+            return false;
+        }
+    }
     return true;
 }
 
@@ -386,8 +558,62 @@ bool CFMotoDBW::telemetry_healthy() const
 
 bool CFMotoDBW::gear_feedback_matches() const
 {
+    return gear_feedback_matches(_selected_gear);
+}
+
+bool CFMotoDBW::gear_feedback_matches(Gear gear) const
+{
     return !telemetry_enabled() ||
-           (telemetry_healthy() && _telemetry_gear == _selected_gear);
+           (telemetry_healthy() && _telemetry_gear == gear);
+}
+
+bool CFMotoDBW::rc_switch_high(const AP_Int8 &channel_parameter) const
+{
+    const int8_t channel_number = channel_parameter.get();
+    if (channel_number < 1 || channel_number > 16) {
+        return false;
+    }
+    const RC_Channel *channel = ::rc().channel(static_cast<uint8_t>(channel_number - 1));
+    return channel != nullptr && channel->get_radio_in() >= 1700;
+}
+
+bool CFMotoDBW::rpm_below(const AP_Int8 &instance_parameter, const AP_Int32 &limit_parameter) const
+{
+    const int8_t instance = instance_parameter.get();
+    if (instance == 0) {
+        return true;
+    }
+    AP_RPM *rpm = AP::rpm();
+    float value = 0.0f;
+    return rpm != nullptr && instance >= 1 && instance <= 2 &&
+           rpm->get_rpm(static_cast<uint8_t>(instance - 1), value) &&
+           value <= MAX(limit_parameter.get(), 0);
+}
+
+bool CFMotoDBW::engine_running() const
+{
+    const int8_t instance = _engine_rpm_instance.get();
+    AP_RPM *rpm = AP::rpm();
+    float value = 0.0f;
+    return rpm != nullptr && instance >= 1 && instance <= 2 &&
+           rpm->get_rpm(static_cast<uint8_t>(instance - 1), value) &&
+           value >= MAX(_engine_running_rpm.get(), 0);
+}
+
+bool CFMotoDBW::shift_in_progress() const
+{
+    return _shift_state != ShiftState::steady;
+}
+
+bool CFMotoDBW::shift_timed_out(uint32_t now_ms) const
+{
+    const uint32_t timeout_ms = static_cast<uint32_t>(constrain_int16(_shift_timeout_ms.get(), 500, 15000));
+    return _shift_started_ms != 0 && now_ms - _shift_started_ms > timeout_ms;
+}
+
+bool CFMotoDBW::shift_requires_neutral(Gear from, Gear to) const
+{
+    return from != Gear::neutral && to != Gear::neutral;
 }
 
 CFMotoDBW::Gear CFMotoDBW::decode_gear(uint16_t dio) const
@@ -436,7 +662,7 @@ CFMotoDBW::Outputs CFMotoDBW::active_outputs(float throttle_pct) const
     const float deadzone = constrain_float(_throttle_deadzone.get(), 0.0f, 30.0f);
     Outputs outputs{gas_idle, brake_release, gear_pwm(_selected_gear)};
 
-    if (_throttle_release_required || !gear_feedback_matches()) {
+    if (_throttle_release_required || shift_in_progress() || !gear_feedback_matches()) {
         outputs.brake_pwm = constrained_pwm(_brake_hold_pwm);
         return outputs;
     }
@@ -517,6 +743,204 @@ void CFMotoDBW::accept_telemetry_packet()
     _last_telemetry_ms = AP_HAL::millis();
 }
 
+void CFMotoDBW::set_relay(uint8_t relay_index, bool enabled) const
+{
+    AP_Relay *relay = AP::relay();
+    if (relay == nullptr || !relay->enabled(relay_index)) {
+        return;
+    }
+    if (enabled) {
+        relay->on(relay_index);
+    } else {
+        relay->off(relay_index);
+    }
+}
+
+void CFMotoDBW::start_shift(Gear target, uint32_t now_ms)
+{
+    _target_gear = target;
+    _shift_state = ShiftState::braking;
+    _shift_started_ms = now_ms;
+    _shift_state_started_ms = now_ms;
+    _throttle_release_required = true;
+}
+
+void CFMotoDBW::update_shift(Gear requested, bool throttle_is_neutral, float ground_speed, uint32_t now_ms)
+{
+    if (_shift_state == ShiftState::fault) {
+        const bool stopped = fabsf(ground_speed) <= MAX(_shift_speed_max.get(), 0.0f);
+        if (requested == Gear::neutral && throttle_is_neutral && stopped) {
+            _target_gear = Gear::neutral;
+            _selected_gear = Gear::neutral;
+            _shift_state = ShiftState::verifying;
+            _shift_started_ms = now_ms;
+            _shift_state_started_ms = now_ms;
+        }
+        return;
+    }
+
+    if (_shift_state == ShiftState::steady) {
+        if (requested != _selected_gear) {
+            start_shift(requested, now_ms);
+        }
+        return;
+    }
+
+    if (shift_timed_out(now_ms)) {
+        _shift_state = ShiftState::fault;
+        return;
+    }
+
+    const bool speed_safe = fabsf(ground_speed) <= MAX(_shift_speed_max.get(), 0.0f);
+    const bool rpm_safe = rpm_below(_shift_rpm_instance, _shift_rpm_max);
+    switch (_shift_state) {
+    case ShiftState::braking: {
+        if (!throttle_is_neutral || !speed_safe || !rpm_safe) {
+            _shift_state_started_ms = now_ms;
+            return;
+        }
+        const uint32_t settle_ms = static_cast<uint32_t>(MAX(_shift_brake_ms.get(), 0) + MAX(_shift_stop_ms.get(), 0));
+        if (now_ms - _shift_state_started_ms < settle_ms) {
+            return;
+        }
+        if (shift_requires_neutral(_selected_gear, _target_gear)) {
+            _selected_gear = Gear::neutral;
+            _shift_state = ShiftState::neutral_dwell;
+        } else {
+            _selected_gear = _target_gear;
+            _shift_state = ShiftState::verifying;
+        }
+        _shift_state_started_ms = now_ms;
+        break;
+    }
+    case ShiftState::neutral_dwell:
+        if (!gear_feedback_matches(Gear::neutral)) {
+            return;
+        }
+        if (now_ms - _shift_state_started_ms >= static_cast<uint32_t>(MAX(_shift_neutral_ms.get(), 0))) {
+            _shift_state = ShiftState::moving;
+            _shift_state_started_ms = now_ms;
+        }
+        break;
+    case ShiftState::moving:
+        _selected_gear = _target_gear;
+        _shift_state = ShiftState::verifying;
+        _shift_state_started_ms = now_ms;
+        break;
+    case ShiftState::verifying:
+        if (gear_feedback_matches(_target_gear)) {
+            _shift_state = ShiftState::steady;
+            _shift_started_ms = 0;
+            _shift_state_started_ms = now_ms;
+        }
+        break;
+    case ShiftState::steady:
+    case ShiftState::fault:
+        break;
+    }
+}
+
+void CFMotoDBW::update_engine(bool armed, bool failsafe, bool throttle_is_neutral, float ground_speed, uint32_t now_ms)
+{
+    if (_engine_enable.get() == 0) {
+        set_relay(1, false);
+        set_relay(0, false);
+        _engine_state = EngineState::off;
+        _engine_retry_count = 0;
+        return;
+    }
+
+    const bool ignition_requested = rc_switch_high(_ignition_rc_channel);
+    const bool start_requested = rc_switch_high(_starter_rc_channel);
+    const bool stopped = fabsf(ground_speed) <= MAX(_shift_speed_max.get(), 0.0f);
+    const bool gearbox_safe = (_selected_gear == Gear::park || _selected_gear == Gear::neutral) && gear_feedback_matches();
+
+    if (!ignition_requested) {
+        set_relay(1, false);
+        if (stopped) {
+            set_relay(0, false);
+            _engine_state = EngineState::off;
+            _engine_retry_count = 0;
+        }
+        return;
+    }
+
+    set_relay(0, true);
+    if (engine_running()) {
+        set_relay(1, false);
+        _engine_state = EngineState::running;
+        _engine_retry_count = 0;
+        return;
+    }
+
+    if (failsafe || !start_requested || !throttle_is_neutral || !stopped || !gearbox_safe || !armed) {
+        set_relay(1, false);
+        if (!start_requested && _engine_state == EngineState::fault) {
+            _engine_state = EngineState::off;
+            _engine_retry_count = 0;
+        }
+        return;
+    }
+
+    switch (_engine_state) {
+    case EngineState::off:
+    case EngineState::running:
+        _engine_state = EngineState::ignition_delay;
+        _engine_state_started_ms = now_ms;
+        break;
+    case EngineState::ignition_delay:
+        if (now_ms - _engine_state_started_ms >= static_cast<uint32_t>(MAX(_engine_start_delay_ms.get(), 0))) {
+            set_relay(1, true);
+            _engine_state = EngineState::cranking;
+            _engine_state_started_ms = now_ms;
+        }
+        break;
+    case EngineState::cranking:
+        set_relay(1, true);
+        if (now_ms - _engine_state_started_ms >= static_cast<uint32_t>(MAX(_engine_crank_ms.get(), 100))) {
+            set_relay(1, false);
+            if (_engine_retry_count >= static_cast<uint8_t>(MAX(_engine_max_retries.get(), 0))) {
+                _engine_state = EngineState::fault;
+            } else {
+                _engine_retry_count++;
+                _engine_state = EngineState::retry_delay;
+                _engine_state_started_ms = now_ms;
+            }
+        }
+        break;
+    case EngineState::retry_delay:
+        if (now_ms - _engine_state_started_ms >= static_cast<uint32_t>(MAX(_engine_retry_delay_ms.get(), 500))) {
+            _engine_state = EngineState::ignition_delay;
+            _engine_state_started_ms = now_ms;
+        }
+        break;
+    case EngineState::fault:
+        set_relay(1, false);
+        break;
+    }
+}
+
+void CFMotoDBW::update_driveline(bool failsafe, bool throttle_is_neutral, float ground_speed)
+{
+    if (failsafe) {
+        return;
+    }
+    const bool speed_safe = fabsf(ground_speed) <= MAX(_axle_shift_speed_max.get(), 0.0f);
+    const bool rpm_safe = rpm_below(_axle_rpm_instance, _axle_rpm_max);
+    if (!throttle_is_neutral || !speed_safe || !rpm_safe) {
+        return;
+    }
+
+    if (_fourwd_rc_channel.get() != 0) {
+        _fourwd_enabled = rc_switch_high(_fourwd_rc_channel);
+        set_relay(5, _fourwd_enabled);
+    }
+    if (_diff_lock_rc_channel.get() != 0) {
+        _diff_lock_enabled = _fourwd_enabled && rc_switch_high(_diff_lock_rc_channel);
+        set_relay(4, _diff_lock_enabled);
+    }
+}
+
 void CFMotoDBW::write_outputs(const Outputs &outputs) const
 {
     SRV_Channels::set_output_pwm(SRV_Channel::k_scripting1, outputs.gas_pwm);
@@ -538,10 +962,17 @@ void CFMotoDBW::setup_failsafe() const
 void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float ground_speed)
 {
     update_telemetry();
+    const uint32_t now_ms = AP_HAL::millis();
+    const float deadzone = constrain_float(_throttle_deadzone.get(), 0.0f, 30.0f);
+    const bool throttle_is_neutral = fabsf(throttle_pct) <= deadzone;
 
     if (_enable.get() == 0) {
         _throttle_release_required = true;
         _selected_gear = Gear::neutral;
+        _target_gear = Gear::neutral;
+        _shift_state = ShiftState::steady;
+        update_engine(armed, failsafe, throttle_is_neutral, ground_speed, now_ms);
+        update_driveline(failsafe, throttle_is_neutral, ground_speed);
         write_outputs(safe_outputs());
         return;
     }
@@ -553,30 +984,32 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
         const bool stopped = fabsf(ground_speed) <= MAX(_shift_speed_max.get(), 0.0f);
         if (stopped) {
             _selected_gear = Gear::neutral;
+            _target_gear = Gear::neutral;
+            _shift_state = ShiftState::steady;
         }
+        update_engine(armed, failsafe, throttle_is_neutral, ground_speed, now_ms);
+        update_driveline(failsafe, throttle_is_neutral, ground_speed);
         write_outputs(safe_outputs());
         return;
     }
 
     if (failsafe) {
         _throttle_release_required = true;
+        update_engine(armed, true, throttle_is_neutral, ground_speed, now_ms);
+        update_driveline(true, throttle_is_neutral, ground_speed);
         write_outputs(safe_outputs());
         return;
     }
 
     const Gear requested = requested_gear();
-    const float deadzone = constrain_float(_throttle_deadzone.get(), 0.0f, 30.0f);
-    const bool throttle_is_neutral = fabsf(throttle_pct) <= deadzone;
-    const bool speed_allows_shift = fabsf(ground_speed) <= MAX(_shift_speed_max.get(), 0.0f);
-    if (requested != _selected_gear && throttle_is_neutral && speed_allows_shift) {
-        _selected_gear = requested;
-        _throttle_release_required = true;
-    }
+    update_shift(requested, throttle_is_neutral, ground_speed, now_ms);
+    update_engine(armed, false, throttle_is_neutral, ground_speed, now_ms);
+    update_driveline(false, throttle_is_neutral, ground_speed);
 
     // Require a neutral throttle command after arming, failsafe recovery or
     // a gearbox change. This prevents motion from resuming automatically
     // when feedback or the radio link returns.
-    if (_throttle_release_required && throttle_is_neutral && gear_feedback_matches()) {
+    if (_throttle_release_required && !shift_in_progress() && throttle_is_neutral && gear_feedback_matches()) {
         _throttle_release_required = false;
     }
 

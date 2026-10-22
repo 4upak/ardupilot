@@ -767,6 +767,27 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("RC_OPTIONS", 8224);
     AP_Param::set_default_by_name("RSSI_TYPE", 3);
 
+    // CFMOTO relay harness: ignition, starter, headlights, EW payload,
+    // differential lock and four-wheel drive. All default OFF.
+    AP_Param::set_default_by_name("RELAY1_FUNCTION", 1);
+    AP_Param::set_default_by_name("RELAY1_PIN", 50);
+    AP_Param::set_default_by_name("RELAY1_DEFAULT", 0);
+    AP_Param::set_default_by_name("RELAY2_FUNCTION", 1);
+    AP_Param::set_default_by_name("RELAY2_PIN", 51);
+    AP_Param::set_default_by_name("RELAY2_DEFAULT", 0);
+    AP_Param::set_default_by_name("RELAY3_FUNCTION", 1);
+    AP_Param::set_default_by_name("RELAY3_PIN", 52);
+    AP_Param::set_default_by_name("RELAY3_DEFAULT", 0);
+    AP_Param::set_default_by_name("RELAY4_FUNCTION", 1);
+    AP_Param::set_default_by_name("RELAY4_PIN", 53);
+    AP_Param::set_default_by_name("RELAY4_DEFAULT", 0);
+    AP_Param::set_default_by_name("RELAY5_FUNCTION", 1);
+    AP_Param::set_default_by_name("RELAY5_PIN", 105);
+    AP_Param::set_default_by_name("RELAY5_DEFAULT", 0);
+    AP_Param::set_default_by_name("RELAY6_FUNCTION", 1);
+    AP_Param::set_default_by_name("RELAY6_PIN", 106);
+    AP_Param::set_default_by_name("RELAY6_DEFAULT", 0);
+
     // Reserve AUX5/AUX6 as GPIO frequency inputs, matching the recovered
     // CFMOTO installation. Sensor identity must be verified on the vehicle.
     AP_Param::set_default_by_name("SERVO13_FUNCTION", -1);

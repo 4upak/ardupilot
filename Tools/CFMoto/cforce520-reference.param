@@ -4,6 +4,44 @@
 # Keep DBW disabled until gas, brake, steering and gearbox are verified.
 ATV_ENABLE,0
 
+# Active-low gearbox input patterns recovered from the legacy binary.
+# D3..D7 idle HIGH; exactly one selected input is pulled LOW.
+ATV_DIO_MASK,248
+ATV_DIO_P,240
+ATV_DIO_R,232
+ATV_DIO_N,216
+ATV_DIO_H,184
+ATV_DIO_L,120
+
+# Expanded shift state machine. RPM interlock stays disabled until the
+# identities and scaling of RPM1/RPM2 are confirmed on the vehicle.
+ATV_SH_BRK_MS,750
+ATV_SH_STOP_MS,500
+ATV_SH_NEUT_MS,500
+ATV_SH_TMO,5000
+ATV_SH_RPM_I,0
+ATV_SH_RPM_MAX,1000
+
+# Starter state machine is deliberately disabled until relay polarity and
+# the engine RPM input are proven. Legacy operator channels are retained.
+ATV_ENG_EN,0
+ATV_IGN_CH,12
+ATV_START_CH,9
+ATV_ENG_RPM_I,0
+ATV_ENG_RUN_RPM,600
+ATV_ENG_DLY,500
+ATV_ENG_CRANK,3000
+ATV_ENG_RETRY_D,2000
+ATV_ENG_RETRIES,2
+
+# Old RC1/RC3 mappings conflict with current steering/throttle, so 4WD and
+# differential-lock channels remain unassigned until the transmitter map is final.
+ATV_4WD_CH,0
+ATV_DIFF_CH,0
+ATV_AXLE_SPD,0.2
+ATV_AXLE_RPM_I,0
+ATV_AXLE_RPM,500
+
 # Legacy five-position gearbox calibration; presumed P/R/N/H/L order.
 ATV_GEAR_P,1000
 ATV_GEAR_R,1225

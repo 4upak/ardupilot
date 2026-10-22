@@ -31,6 +31,31 @@ The profile maps these in the presumed selector order P/R/N/H/L.  Verify every
 position with the actuator disconnected from the selector first, then confirm
 the real gear through the Nano telemetry before enabling `ATV_ENABLE`.
 
+The recovered selector inputs are active-low. D3 through D7 normally read
+HIGH and exactly one selected gear input is pulled LOW. The firmware defaults
+therefore decode P/R/N/H/L as `0xF0/0xE8/0xD8/0xB8/0x78` under mask `0xF8`.
+
+The CFMOTO shift controller uses an explicit sequence: apply the service
+brake, confirm stopped conditions continuously, pass through Neutral when
+moving between two non-Neutral positions, dwell, command the target, and
+verify telemetry. A sequence timeout latches a fault; requesting Neutral while
+stopped clears it through the same feedback check.
+
+## Engine and driveline state machines
+
+`ATV_ENG_EN` enables a guarded ignition/starter sequence on relays 1 and 2.
+Starting requires an armed vehicle, neutral throttle, stopped speed, P or N,
+valid gearbox feedback, and a configured engine RPM input. The starter has an
+ignition delay, maximum crank time, retry delay and retry limit; reaching the
+running RPM threshold releases it immediately. Keep the feature disabled
+until relay polarity and engine RPM identity are measured.
+
+`ATV_4WD_CH` and `ATV_DIFF_CH` control relays 6 and 5 only while throttle,
+speed and optional RPM interlocks are safe. Differential lock is allowed only
+with 4WD enabled. Failsafe retains the existing driveline state instead of
+switching a loaded mechanism. The channels default to zero because the legacy
+RC1/RC3 assignments conflict with current Rover steering/throttle inputs.
+
 ## Frequency inputs
 
 The recovered installation used the last two FMU/AUX outputs as rising-edge
