@@ -671,9 +671,9 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("GUID_TIMEOUT", 62, ParametersG2, guided_timeout, 3.0),
 
-    // @Group: ATV_
+    // @Group: MAUL_
     // @Path: CFMotoDBW.cpp
-    AP_SUBGROUPINFO(cfmoto_dbw, "ATV_", 63, ParametersG2, CFMotoDBW),
+    AP_SUBGROUPINFO(cfmoto_dbw, "MAUL_", 63, ParametersG2, CFMotoDBW),
 
     AP_GROUPEND
 };

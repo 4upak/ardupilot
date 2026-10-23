@@ -31,7 +31,7 @@ The earlier installation stored five actuator positions:
 
 The profile maps these in the presumed selector order P/R/N/H/L.  Verify every
 position with the actuator disconnected from the selector first, then confirm
-the real gear through the Nano telemetry before enabling `ATV_ENABLE`.
+the real gear through the Nano telemetry before enabling `MAUL_ENABLE`.
 
 The recovered selector inputs are active-low. D3 through D7 normally read
 HIGH and exactly one selected gear input is pulled LOW. The firmware defaults
@@ -45,14 +45,14 @@ stopped clears it through the same feedback check.
 
 ## Engine and driveline state machines
 
-`ATV_ENG_EN` enables a guarded ignition/starter sequence on relays 1 and 2.
+`MAUL_ENG_EN` enables a guarded ignition/starter sequence on relays 1 and 2.
 Starting requires an armed vehicle, neutral throttle, stopped speed, P or N,
 valid gearbox feedback, and a configured engine RPM input. The starter has an
 ignition delay, maximum crank time, retry delay and retry limit; reaching the
 running RPM threshold releases it immediately. Keep the feature disabled
 until relay polarity and engine RPM identity are measured.
 
-`ATV_4WD_CH` and `ATV_DIFF_CH` control relays 6 and 5 only while throttle,
+`MAUL_4WD_CH` and `MAUL_DIFF_CH` control relays 6 and 5 only while throttle,
 speed and optional RPM interlocks are safe. Differential lock is allowed only
 with 4WD enabled. Failsafe retains the existing driveline state instead of
 switching a loaded mechanism. The channels default to zero because the legacy
@@ -107,4 +107,4 @@ health threshold for a safety decision.
   `BRD_SAFETY_DEFLT=0`, or direct RC passthrough output configuration.
 
 Load `cforce520-reference.param` only while actuator power is disconnected.
-The file keeps `ATV_ENABLE=0` and gearbox telemetry disabled for calibration.
+The file keeps `MAUL_ENABLE=0` and gearbox telemetry disabled for calibration.

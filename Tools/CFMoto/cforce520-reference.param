@@ -2,55 +2,55 @@
 # Bench-test only: actuator power disconnected while loading and validating.
 
 # Keep DBW disabled until gas, brake, steering and gearbox are verified.
-ATV_ENABLE,0
+MAUL_ENABLE,0
 
 # Active-low gearbox input patterns recovered from the legacy binary.
 # D3..D7 idle HIGH; exactly one selected input is pulled LOW.
-ATV_DIO_MASK,248
-ATV_DIO_P,240
-ATV_DIO_R,232
-ATV_DIO_N,216
-ATV_DIO_H,184
-ATV_DIO_L,120
+MAUL_DIO_MASK,248
+MAUL_DIO_P,240
+MAUL_DIO_R,232
+MAUL_DIO_N,216
+MAUL_DIO_H,184
+MAUL_DIO_L,120
 
 # Expanded shift state machine. RPM interlock stays disabled until the
 # identities and scaling of RPM1/RPM2 are confirmed on the vehicle.
-ATV_SH_BRK_MS,750
-ATV_SH_STOP_MS,500
-ATV_SH_NEUT_MS,500
-ATV_SH_TMO,5000
-ATV_SH_RPM_I,0
-ATV_SH_RPM_MAX,1000
+MAUL_SH_BRK_MS,750
+MAUL_SH_STOP_MS,500
+MAUL_SH_NEUT_MS,500
+MAUL_SH_TMO,5000
+MAUL_SH_RPM_I,0
+MAUL_SH_RPM_MAX,1000
 
 # Starter state machine is deliberately disabled until relay polarity and
 # the engine RPM input are proven. Legacy operator channels are retained.
-ATV_ENG_EN,0
-ATV_IGN_CH,12
-ATV_START_CH,9
-ATV_ENG_RPM_I,0
-ATV_ENG_RUN_RPM,600
-ATV_ENG_DLY,500
-ATV_ENG_CRANK,3000
-ATV_ENG_RETRY_D,2000
-ATV_ENG_RETRIES,2
+MAUL_ENG_EN,0
+MAUL_IGN_CH,12
+MAUL_START_CH,9
+MAUL_ENG_RPM_I,0
+MAUL_ENG_RUN_RPM,600
+MAUL_ENG_DLY,500
+MAUL_ENG_CRANK,3000
+MAUL_ENG_RETRY_D,2000
+MAUL_ENG_RETRIES,2
 
 # Non-conflicting auxiliary switches. RC8 remains the gearbox selector.
 # RC6 four-wheel drive; RC7 headlights; RC9 starter; RC10 EW payload;
 # RC11 differential lock; RC12 ignition.
-ATV_4WD_CH,6
-ATV_DIFF_CH,11
-ATV_LIGHT_CH,7
-ATV_EW_CH,10
-ATV_AXLE_SPD,0.2
-ATV_AXLE_RPM_I,0
-ATV_AXLE_RPM,500
+MAUL_4WD_CH,6
+MAUL_DIFF_CH,11
+MAUL_LIGHT_CH,7
+MAUL_EW_CH,10
+MAUL_AXLE_SPD,0.2
+MAUL_AXLE_RPM_I,0
+MAUL_AXLE_RPM,500
 
 # Legacy five-position gearbox calibration; presumed P/R/N/H/L order.
-ATV_GEAR_P,1000
-ATV_GEAR_R,1225
-ATV_GEAR_N,1500
-ATV_GEAR_H,1725
-ATV_GEAR_L,2000
+MAUL_GEAR_P,1000
+MAUL_GEAR_R,1225
+MAUL_GEAR_N,1500
+MAUL_GEAR_H,1725
+MAUL_GEAR_L,2000
 
 # Verified legacy actuator output envelope.  Steering remains 1000..2000.
 SERVO1_MIN,988

@@ -478,7 +478,7 @@ bool CFMotoDBW::enabled() const
 bool CFMotoDBW::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
 {
     if (!enabled()) {
-        hal.util->snprintf(failure_msg, failure_msg_len, "ATV_ENABLE disabled");
+        hal.util->snprintf(failure_msg, failure_msg_len, "MAUL_ENABLE disabled");
         return false;
     }
 
