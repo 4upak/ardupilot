@@ -101,11 +101,11 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
 
     // @Param: GEAR_CH
     // @DisplayName: Gearbox RC input channel
-    // @Description: RC input channel selecting P, R, N, H and L in five equal PWM bands. Zero always requests Neutral.
+    // @Description: RC input channel selecting P, R, N, H and L using the calibrated GIN_P through GIN_L button values. Zero always requests Neutral.
     // @Range: 0 16
     // @Increment: 1
     // @User: Standard
-    AP_GROUPINFO("GEAR_CH", 11, CFMotoDBW, _gear_rc_channel, 8),
+    AP_GROUPINFO("GEAR_CH", 11, CFMotoDBW, _gear_rc_channel, 6),
 
     // @Param: SHIFT_SPD
     // @DisplayName: Maximum gearbox shift speed
@@ -324,7 +324,7 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Description: RC channel requesting relay 6 above 1700 PWM. Zero disables automatic 4WD relay control.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 6),
+    AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 0),
 
     // @Param: DIFF_CH
     // @DisplayName: Differential-lock RC channel
@@ -369,6 +369,54 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Range: 0 16
     // @User: Standard
     AP_GROUPINFO("EW_CH", 45, CFMotoDBW, _ew_rc_channel, 10),
+
+    // @Param: GIN_P
+    // @DisplayName: Gear selector Park input PWM
+    // @Description: RC input PWM produced by the gearbox selector Park button.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @User: Standard
+    AP_GROUPINFO("GIN_P", 46, CFMotoDBW, _gear_input_park_pwm, 1755),
+
+    // @Param: GIN_R
+    // @DisplayName: Gear selector Reverse input PWM
+    // @Description: RC input PWM produced by the gearbox selector Reverse button.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @User: Standard
+    AP_GROUPINFO("GIN_R", 47, CFMotoDBW, _gear_input_reverse_pwm, 1535),
+
+    // @Param: GIN_N
+    // @DisplayName: Gear selector Neutral input PWM
+    // @Description: RC input PWM produced by the gearbox selector Neutral button.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @User: Standard
+    AP_GROUPINFO("GIN_N", 48, CFMotoDBW, _gear_input_neutral_pwm, 1412),
+
+    // @Param: GIN_H
+    // @DisplayName: Gear selector High input PWM
+    // @Description: RC input PWM produced by the gearbox selector High button.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @User: Standard
+    AP_GROUPINFO("GIN_H", 49, CFMotoDBW, _gear_input_high_pwm, 1295),
+
+    // @Param: GIN_L
+    // @DisplayName: Gear selector Low input PWM
+    // @Description: RC input PWM produced by the gearbox selector Low button.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @User: Standard
+    AP_GROUPINFO("GIN_L", 50, CFMotoDBW, _gear_input_low_pwm, 1075),
+
+    // @Param: GIN_TOL
+    // @DisplayName: Gear selector input tolerance
+    // @Description: Maximum absolute PWM error from a calibrated gearbox selector button. An unmatched value inhibits propulsion and holds the brake.
+    // @Units: PWM
+    // @Range: 5 100
+    // @User: Standard
+    AP_GROUPINFO("GIN_TOL", 51, CFMotoDBW, _gear_input_tolerance_pwm, 50),
 
     AP_GROUPEND
 };
@@ -418,21 +466,26 @@ CFMotoDBW::Gear CFMotoDBW::requested_gear() const
 
     const int16_t pwm = gear_channel->get_radio_in();
     if (pwm < RC_Channel::RC_MIN_LIMIT_PWM || pwm > RC_Channel::RC_MAX_LIMIT_PWM) {
-        return Gear::neutral;
+        return Gear::unknown;
     }
-    if (pwm < 1200) {
-        return Gear::park;
+
+    const struct {
+        Gear gear;
+        int16_t center_pwm;
+    } positions[] {
+        { Gear::park, _gear_input_park_pwm.get() },
+        { Gear::reverse, _gear_input_reverse_pwm.get() },
+        { Gear::neutral, _gear_input_neutral_pwm.get() },
+        { Gear::high, _gear_input_high_pwm.get() },
+        { Gear::low, _gear_input_low_pwm.get() },
+    };
+    const int16_t tolerance = constrain_int16(_gear_input_tolerance_pwm.get(), 5, 100);
+    for (const auto &position : positions) {
+        if (abs(pwm - position.center_pwm) <= tolerance) {
+            return position.gear;
+        }
     }
-    if (pwm < 1400) {
-        return Gear::reverse;
-    }
-    if (pwm < 1600) {
-        return Gear::neutral;
-    }
-    if (pwm < 1800) {
-        return Gear::high;
-    }
-    return Gear::low;
+    return Gear::unknown;
 }
 
 uint16_t CFMotoDBW::gear_pwm(Gear gear) const
@@ -523,9 +576,34 @@ bool CFMotoDBW::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
         }
     }
 
+    const int16_t gear_inputs[] {
+        _gear_input_park_pwm.get(),
+        _gear_input_reverse_pwm.get(),
+        _gear_input_neutral_pwm.get(),
+        _gear_input_high_pwm.get(),
+        _gear_input_low_pwm.get(),
+    };
+    const int16_t gear_input_tolerance = constrain_int16(_gear_input_tolerance_pwm.get(), 5, 100);
+    for (uint8_t i = 0; i < ARRAY_SIZE(gear_inputs); i++) {
+        if (gear_inputs[i] < RC_Channel::RC_MIN_LIMIT_PWM || gear_inputs[i] > RC_Channel::RC_MAX_LIMIT_PWM) {
+            hal.util->snprintf(failure_msg, failure_msg_len, "gear input PWM invalid");
+            return false;
+        }
+        for (uint8_t j = i + 1; j < ARRAY_SIZE(gear_inputs); j++) {
+            if (abs(gear_inputs[i] - gear_inputs[j]) <= gear_input_tolerance * 2) {
+                hal.util->snprintf(failure_msg, failure_msg_len, "gear input PWM overlaps");
+                return false;
+            }
+        }
+    }
+
     const int8_t gear_channel = _gear_rc_channel.get();
     if (gear_channel < 1 || gear_channel > 16) {
         hal.util->snprintf(failure_msg, failure_msg_len, "gear RC channel invalid");
+        return false;
+    }
+    if (_fourwd_rc_channel.get() == gear_channel) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "gear and 4WD RC conflict");
         return false;
     }
     if (telemetry_enabled() && !telemetry_healthy()) {
@@ -1037,6 +1115,14 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
     }
 
     const Gear requested = requested_gear();
+    if (requested == Gear::unknown) {
+        _throttle_release_required = true;
+        update_engine(armed, true, throttle_is_neutral, ground_speed, now_ms);
+        update_driveline(true, throttle_is_neutral, ground_speed);
+        update_accessories(true);
+        write_outputs(safe_outputs());
+        return;
+    }
     update_shift(requested, throttle_is_neutral, ground_speed, now_ms);
     update_engine(armed, false, throttle_is_neutral, ground_speed, now_ms);
     update_driveline(false, throttle_is_neutral, ground_speed);

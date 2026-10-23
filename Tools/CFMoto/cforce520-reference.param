@@ -37,7 +37,7 @@ MAUL_ENG_RETRIES,2
 # Non-conflicting auxiliary switches. RC8 remains the gearbox selector.
 # RC6 four-wheel drive; RC7 headlights; RC9 starter; RC10 EW payload;
 # RC11 differential lock; RC12 ignition.
-MAUL_4WD_CH,6
+MAUL_4WD_CH,0
 MAUL_DIFF_CH,11
 MAUL_LIGHT_CH,7
 MAUL_EW_CH,10
@@ -51,6 +51,13 @@ MAUL_GEAR_R,1225
 MAUL_GEAR_N,1500
 MAUL_GEAR_H,1725
 MAUL_GEAR_L,2000
+MAUL_GEAR_CH,6
+MAUL_GIN_P,1755
+MAUL_GIN_R,1535
+MAUL_GIN_N,1412
+MAUL_GIN_H,1295
+MAUL_GIN_L,1075
+MAUL_GIN_TOL,50
 
 # Verified legacy actuator output envelope.  Steering remains 1000..2000.
 SERVO1_MIN,988

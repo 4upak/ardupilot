@@ -62,6 +62,12 @@ private:
     AP_Int16 _gear_high_pwm;
     AP_Int16 _gear_low_pwm;
     AP_Int8 _gear_rc_channel;
+    AP_Int16 _gear_input_park_pwm;
+    AP_Int16 _gear_input_reverse_pwm;
+    AP_Int16 _gear_input_neutral_pwm;
+    AP_Int16 _gear_input_high_pwm;
+    AP_Int16 _gear_input_low_pwm;
+    AP_Int16 _gear_input_tolerance_pwm;
     AP_Float _shift_speed_max;
     AP_Float _throttle_deadzone;
     AP_Int8 _telemetry_enable;
