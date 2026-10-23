@@ -10,7 +10,7 @@ void Rover::set_servos(void)
     g2.attitude_control.get_forward_speed(speed);
 
     if (motor_test) {
-        g2.cfmoto_dbw.update(false, true, 0.0f, speed);
+        g2.cfmoto_dbw.update(false, true, speed);
         motor_test_output();
     } else {
         const bool drive_enabled = arming.is_armed() && hal.util->get_soft_armed();
@@ -24,14 +24,11 @@ void Rover::set_servos(void)
         if (g2.cfmoto_dbw.steering_controller_enabled() && (!drive_enabled || failsafe_active)) {
             g2.motors.set_steering(0.0f);
         }
-        g2.cfmoto_dbw.update(drive_enabled,
-                             failsafe_active,
-                             dbw_throttle,
-                             speed);
+        g2.cfmoto_dbw.update(drive_enabled, failsafe_active, speed);
 
-        // Negative throttle operates the separate service brake. Do not let
-        // AP_MotorsUGV interpret it as reverse motor torque and reverse the
-        // steering output.
+        // CFMotoDBW reads the separate CH2 gas and CH5 brake inputs directly.
+        // Keep the stock motor layer non-reversing so it cannot invert the
+        // steering output or contend with the dedicated service-brake output.
         g2.motors.set_throttle(MAX(dbw_throttle, 0.0f));
 
         g2.motors.output(arming.is_armed(), speed, G_Dt);

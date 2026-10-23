@@ -118,7 +118,7 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
 
     // @Param: THR_DZ
     // @DisplayName: Gas and brake deadzone
-    // @Description: Absolute throttle command below which gas is idle and the service brake is released. Positive commands operate gas and negative commands operate brake.
+    // @Description: Absolute command below which the separate gas and service-brake RC inputs are treated as released.
     // @Units: %
     // @Range: 0 30
     // @Increment: 1
@@ -254,31 +254,31 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
 
     // @Param: ENG_EN
     // @DisplayName: Engine start controller enable
-    // @Description: Enables ignition and starter sequencing on relay 1 and relay 2. Keep disabled until the engine RPM input and relay polarity are verified.
+    // @Description: Enables guarded ignition and starter sequencing on relay 1 and relay 2. Starter operation still requires armed, stopped, neutral controls and gearbox P or N.
     // @Values: 0:Disabled,1:Enabled
     // @User: Standard
-    AP_GROUPINFO("ENG_EN", 30, CFMotoDBW, _engine_enable, 0),
+    AP_GROUPINFO("ENG_EN", 30, CFMotoDBW, _engine_enable, 1),
 
     // @Param: IGN_CH
     // @DisplayName: Ignition request RC channel
     // @Description: RC channel requesting ignition ON above 1700 PWM and OFF below 1300 PWM.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("IGN_CH", 31, CFMotoDBW, _ignition_rc_channel, 12),
+    AP_GROUPINFO("IGN_CH", 31, CFMotoDBW, _ignition_rc_channel, 3),
 
     // @Param: START_CH
     // @DisplayName: Starter request RC channel
-    // @Description: RC channel requesting an automatic start attempt above 1700 PWM. A new attempt requires the switch to be released after a fault.
+    // @Description: Momentary RC channel requesting starter operation above 1700 PWM. Releasing the control immediately drops the starter and resets the manual attempt.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("START_CH", 32, CFMotoDBW, _starter_rc_channel, 9),
+    AP_GROUPINFO("START_CH", 32, CFMotoDBW, _starter_rc_channel, 1),
 
     // @Param: ENG_RPM_I
     // @DisplayName: Engine RPM input
     // @Description: RPM sensor instance used to detect successful engine start. Zero prevents starter operation.
     // @Values: 0:Disabled,1:RPM1,2:RPM2
     // @User: Standard
-    AP_GROUPINFO("ENG_RPM_I", 33, CFMotoDBW, _engine_rpm_instance, 0),
+    AP_GROUPINFO("ENG_RPM_I", 33, CFMotoDBW, _engine_rpm_instance, 2),
 
     // @Param: ENG_RUN_RPM
     // @DisplayName: Engine running RPM threshold
@@ -317,21 +317,21 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Description: Maximum automatic starter attempts before a latched fault. Zero disables retries after the first attempt.
     // @Range: 0 10
     // @User: Standard
-    AP_GROUPINFO("ENG_RETRIES", 38, CFMotoDBW, _engine_max_retries, 2),
+    AP_GROUPINFO("ENG_RETRIES", 38, CFMotoDBW, _engine_max_retries, 0),
 
     // @Param: 4WD_CH
     // @DisplayName: Four-wheel-drive RC channel
     // @Description: RC channel requesting relay 6 above 1700 PWM. Zero disables automatic 4WD relay control.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 0),
+    AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 7),
 
     // @Param: DIFF_CH
     // @DisplayName: Differential-lock RC channel
     // @Description: RC channel requesting relay 5 above 1700 PWM. Differential lock is applied only while 4WD is enabled.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("DIFF_CH", 40, CFMotoDBW, _diff_lock_rc_channel, 11),
+    AP_GROUPINFO("DIFF_CH", 40, CFMotoDBW, _diff_lock_rc_channel, 10),
 
     // @Param: AXLE_SPD
     // @DisplayName: Maximum driveline switch speed
@@ -361,14 +361,14 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Description: RC channel controlling relay 3. Above 1700 turns the headlights on. The relay is forced off on failsafe.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("LIGHT_CH", 44, CFMotoDBW, _headlights_rc_channel, 7),
+    AP_GROUPINFO("LIGHT_CH", 44, CFMotoDBW, _headlights_rc_channel, 12),
 
     // @Param: EW_CH
     // @DisplayName: EW payload RC channel
     // @Description: RC channel controlling relay 4. Above 1700 turns the EW payload on. The relay is forced off on failsafe.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("EW_CH", 45, CFMotoDBW, _ew_rc_channel, 10),
+    AP_GROUPINFO("EW_CH", 45, CFMotoDBW, _ew_rc_channel, 9),
 
     // @Param: GIN_P
     // @DisplayName: Gear selector Park input PWM
@@ -417,6 +417,36 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Range: 5 100
     // @User: Standard
     AP_GROUPINFO("GIN_TOL", 51, CFMotoDBW, _gear_input_tolerance_pwm, 50),
+
+    // @Param: GAS_CH
+    // @DisplayName: Gas RC channel
+    // @Description: Proportional RC channel for gas. Positive travel from trim commands gas; use RC channel reversal if the direction is inverted.
+    // @Range: 1 16
+    // @User: Standard
+    AP_GROUPINFO("GAS_CH", 52, CFMotoDBW, _gas_rc_channel, 2),
+
+    // @Param: BRK_CH
+    // @DisplayName: Service brake RC channel
+    // @Description: Proportional RC channel for the service brake. Positive travel from trim commands braking and always overrides gas.
+    // @Range: 1 16
+    // @User: Standard
+    AP_GROUPINFO("BRK_CH", 53, CFMotoDBW, _brake_rc_channel, 5),
+
+    // @Param: THR_LIM_CH
+    // @DisplayName: Gas limiter RC channel
+    // @Description: RC channel enabling the gas limit above 1700 PWM. Zero disables the limiter input.
+    // @Range: 0 16
+    // @User: Standard
+    AP_GROUPINFO("THR_LIM_CH", 54, CFMotoDBW, _throttle_limit_rc_channel, 8),
+
+    // @Param: THR_LIM
+    // @DisplayName: Limited maximum gas
+    // @Description: Maximum gas percentage while the limiter channel is active. This limits actuator demand, not vehicle speed.
+    // @Units: %
+    // @Range: 0 100
+    // @Increment: 1
+    // @User: Standard
+    AP_GROUPINFO("THR_LIM", 55, CFMotoDBW, _throttle_limit_pct, 50),
 
     AP_GROUPEND
 };
@@ -606,6 +636,16 @@ bool CFMotoDBW::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
         hal.util->snprintf(failure_msg, failure_msg_len, "gear and 4WD RC conflict");
         return false;
     }
+    const int8_t gas_channel = _gas_rc_channel.get();
+    const int8_t brake_channel = _brake_rc_channel.get();
+    if (gas_channel < 1 || gas_channel > 16 || brake_channel < 1 || brake_channel > 16 || gas_channel == brake_channel) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "gas/brake RC channels invalid");
+        return false;
+    }
+    if (gas_channel == gear_channel || brake_channel == gear_channel) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "drive and gear RC conflict");
+        return false;
+    }
     if (telemetry_enabled() && !telemetry_healthy()) {
         hal.util->snprintf(failure_msg, failure_msg_len, "gear telemetry unhealthy");
         return false;
@@ -674,6 +714,27 @@ bool CFMotoDBW::rc_switch_high(const AP_Int8 &channel_parameter) const
     }
     const RC_Channel *channel = ::rc().channel(static_cast<uint8_t>(channel_number - 1));
     return channel != nullptr && channel->get_radio_in() >= 1700;
+}
+
+float CFMotoDBW::rc_channel_positive_pct(const AP_Int8 &channel_parameter) const
+{
+    const int8_t channel_number = channel_parameter.get();
+    if (channel_number < 1 || channel_number > 16) {
+        return 0.0f;
+    }
+    const RC_Channel *channel = ::rc().channel(static_cast<uint8_t>(channel_number - 1));
+    if (channel == nullptr) {
+        return 0.0f;
+    }
+    return constrain_float(channel->norm_input_dz() * 100.0f, 0.0f, 100.0f);
+}
+
+float CFMotoDBW::throttle_limit_pct() const
+{
+    if (_throttle_limit_rc_channel.get() == 0 || !rc_switch_high(_throttle_limit_rc_channel)) {
+        return 100.0f;
+    }
+    return constrain_float(_throttle_limit_pct.get(), 0.0f, 100.0f);
 }
 
 bool CFMotoDBW::rpm_below(const AP_Int8 &instance_parameter, const AP_Int32 &limit_parameter) const
@@ -754,7 +815,7 @@ CFMotoDBW::Outputs CFMotoDBW::safe_outputs() const
     };
 }
 
-CFMotoDBW::Outputs CFMotoDBW::active_outputs(float throttle_pct) const
+CFMotoDBW::Outputs CFMotoDBW::active_outputs(float gas_pct, float brake_pct) const
 {
     const uint16_t gas_idle = constrained_pwm(_gas_idle_pwm);
     const uint16_t brake_release = constrained_pwm(_brake_release_pwm);
@@ -766,12 +827,13 @@ CFMotoDBW::Outputs CFMotoDBW::active_outputs(float throttle_pct) const
         return outputs;
     }
 
-    if (throttle_pct > deadzone && gear_allows_throttle()) {
-        const float ratio = (throttle_pct - deadzone) / (100.0f - deadzone);
-        outputs.gas_pwm = interpolate_pwm(gas_idle, constrained_pwm(_gas_max_pwm), ratio);
-    } else if (throttle_pct < -deadzone) {
-        const float ratio = (-throttle_pct - deadzone) / (100.0f - deadzone);
+    if (brake_pct > deadzone) {
+        const float ratio = (brake_pct - deadzone) / (100.0f - deadzone);
         outputs.brake_pwm = interpolate_pwm(brake_release, constrained_pwm(_brake_hold_pwm), ratio);
+    } else if (gas_pct > deadzone && gear_allows_throttle()) {
+        const float limited_gas_pct = MIN(gas_pct, throttle_limit_pct());
+        const float ratio = (limited_gas_pct - deadzone) / (100.0f - deadzone);
+        outputs.gas_pwm = interpolate_pwm(gas_idle, constrained_pwm(_gas_max_pwm), ratio);
     }
 
     if (_selected_gear == Gear::park) {
@@ -974,7 +1036,7 @@ void CFMotoDBW::update_engine(bool armed, bool failsafe, bool throttle_is_neutra
 
     if (failsafe || !start_requested || !throttle_is_neutral || !stopped || !gearbox_safe || !armed) {
         set_relay(1, false);
-        if (!start_requested && _engine_state == EngineState::fault) {
+        if (!start_requested && _engine_state != EngineState::running) {
             _engine_state = EngineState::off;
             _engine_retry_count = 0;
         }
@@ -1069,12 +1131,14 @@ void CFMotoDBW::setup_failsafe() const
     }
 }
 
-void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float ground_speed)
+void CFMotoDBW::update(bool armed, bool failsafe, float ground_speed)
 {
     update_telemetry();
     const uint32_t now_ms = AP_HAL::millis();
     const float deadzone = constrain_float(_throttle_deadzone.get(), 0.0f, 30.0f);
-    const bool throttle_is_neutral = fabsf(throttle_pct) <= deadzone;
+    const float gas_pct = rc_channel_positive_pct(_gas_rc_channel);
+    const float brake_pct = rc_channel_positive_pct(_brake_rc_channel);
+    const bool throttle_is_neutral = gas_pct <= deadzone && brake_pct <= deadzone;
 
     if (_enable.get() == 0) {
         _throttle_release_required = true;
@@ -1135,5 +1199,5 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
         _throttle_release_required = false;
     }
 
-    write_outputs(active_outputs(constrain_float(throttle_pct, -100.0f, 100.0f)));
+    write_outputs(active_outputs(gas_pct, brake_pct));
 }

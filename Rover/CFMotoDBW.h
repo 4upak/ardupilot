@@ -12,7 +12,7 @@ public:
     static const AP_Param::GroupInfo var_info[];
     void init();
     void setup_failsafe() const;
-    void update(bool armed, bool failsafe, float throttle_pct, float ground_speed);
+    void update(bool armed, bool failsafe, float ground_speed);
     [[nodiscard]] bool enabled() const;
     [[nodiscard]] bool pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const;
     [[nodiscard]] bool steering_controller_enabled() const;
@@ -102,6 +102,10 @@ private:
     AP_Int32 _axle_rpm_max;
     AP_Int8 _headlights_rc_channel;
     AP_Int8 _ew_rc_channel;
+    AP_Int8 _gas_rc_channel;
+    AP_Int8 _brake_rc_channel;
+    AP_Int8 _throttle_limit_rc_channel;
+    AP_Float _throttle_limit_pct;
     Gear _selected_gear;
     Gear _target_gear = Gear::neutral;
     ShiftState _shift_state = ShiftState::steady;
@@ -134,6 +138,8 @@ private:
     [[nodiscard]] bool gear_feedback_matches() const;
     [[nodiscard]] bool gear_feedback_matches(Gear gear) const;
     [[nodiscard]] bool rc_switch_high(const AP_Int8 &channel_parameter) const;
+    [[nodiscard]] float rc_channel_positive_pct(const AP_Int8 &channel_parameter) const;
+    [[nodiscard]] float throttle_limit_pct() const;
     [[nodiscard]] bool rpm_below(const AP_Int8 &instance_parameter, const AP_Int32 &limit_parameter) const;
     [[nodiscard]] bool engine_running() const;
     [[nodiscard]] bool shift_in_progress() const;
@@ -141,7 +147,7 @@ private:
     [[nodiscard]] bool shift_requires_neutral(Gear from, Gear to) const;
     [[nodiscard]] Gear decode_gear(uint16_t dio) const;
     [[nodiscard]] Outputs safe_outputs() const;
-    [[nodiscard]] Outputs active_outputs(float throttle_pct) const;
+    [[nodiscard]] Outputs active_outputs(float gas_pct, float brake_pct) const;
     void update_telemetry();
     void parse_telemetry_byte(uint8_t byte);
     void accept_telemetry_packet();

@@ -22,25 +22,25 @@ MAUL_SH_TMO,5000
 MAUL_SH_RPM_I,0
 MAUL_SH_RPM_MAX,1000
 
-# Starter state machine is deliberately disabled until relay polarity and
-# the engine RPM input are proven. Legacy operator channels are retained.
-MAUL_ENG_EN,0
-MAUL_IGN_CH,12
-MAUL_START_CH,9
-MAUL_ENG_RPM_I,0
+# Boxer operator controls: SA/CH3 requests Arm/Disarm and ignition, while
+# momentary SF/CH1 requests one guarded starter attempt. RPM2 is the engine
+# tachometer input; automatic retries are disabled.
+MAUL_ENG_EN,1
+MAUL_IGN_CH,3
+MAUL_START_CH,1
+MAUL_ENG_RPM_I,2
 MAUL_ENG_RUN_RPM,600
 MAUL_ENG_DLY,500
 MAUL_ENG_CRANK,3000
 MAUL_ENG_RETRY_D,2000
-MAUL_ENG_RETRIES,2
+MAUL_ENG_RETRIES,0
 
-# Non-conflicting auxiliary switches. RC8 remains the gearbox selector.
-# RC6 four-wheel drive; RC7 headlights; RC9 starter; RC10 EW payload;
-# RC11 differential lock; RC12 ignition.
-MAUL_4WD_CH,0
-MAUL_DIFF_CH,11
-MAUL_LIGHT_CH,7
-MAUL_EW_CH,10
+# Boxer switches: SC drives 2x2/4x4/differential lock through CH7/CH10,
+# SB/CH12 controls headlights, and SE/CH9 controls the EW payload.
+MAUL_4WD_CH,7
+MAUL_DIFF_CH,10
+MAUL_LIGHT_CH,12
+MAUL_EW_CH,9
 MAUL_AXLE_SPD,0.2
 MAUL_AXLE_RPM_I,0
 MAUL_AXLE_RPM,500
@@ -59,6 +59,13 @@ MAUL_GIN_H,1295
 MAUL_GIN_L,1075
 MAUL_GIN_TOL,50
 
+# Separate proportional controls from the Boxer model. Brake overrides gas.
+# SD/CH8 limits maximum gas demand to 50 percent when active.
+MAUL_GAS_CH,2
+MAUL_BRK_CH,5
+MAUL_THR_LIM_CH,8
+MAUL_THR_LIM,50
+
 # Verified legacy actuator output envelope.  Steering remains 1000..2000.
 SERVO1_MIN,988
 SERVO1_TRIM,1500
@@ -73,6 +80,8 @@ SERVO4_MIN,988
 SERVO4_TRIM,1500
 SERVO4_MAX,2012
 SERVO_RATE,50
+RCMAP_ROLL,4
+RCMAP_THROTTLE,2
 
 # Six vehicle relays, all default OFF.
 # 1 ignition; 2 starter; 3 headlights; 4 EW payload;
@@ -120,9 +129,12 @@ RPM2_MIN,10
 RPM2_MAX,100000
 RPM2_MIN_QUAL,0
 
-# ELRS/CRSF receiver on TELEM1 (SERIAL1). Baud is managed automatically.
-SERIAL1_PROTOCOL,23
-SERIAL1_OPTIONS,0
+# ELRS/CRSF receiver on TELEM2 (SERIAL2). Baud is managed automatically.
+SERIAL1_PROTOCOL,-1
+SERIAL2_PROTOCOL,23
+SERIAL2_OPTIONS,0
 RSSI_TYPE,3
 # Use ELRS 420 kbaud and require idle throttle before arming.
 RC_OPTIONS,8224
+
+RC3_OPTION,153
