@@ -324,14 +324,14 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Description: RC channel requesting relay 6 above 1700 PWM. Zero disables automatic 4WD relay control.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 0),
+    AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 6),
 
     // @Param: DIFF_CH
     // @DisplayName: Differential-lock RC channel
     // @Description: RC channel requesting relay 5 above 1700 PWM. Differential lock is applied only while 4WD is enabled.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("DIFF_CH", 40, CFMotoDBW, _diff_lock_rc_channel, 0),
+    AP_GROUPINFO("DIFF_CH", 40, CFMotoDBW, _diff_lock_rc_channel, 11),
 
     // @Param: AXLE_SPD
     // @DisplayName: Maximum driveline switch speed
@@ -355,6 +355,20 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @Range: 0 100000
     // @User: Standard
     AP_GROUPINFO("AXLE_RPM", 43, CFMotoDBW, _axle_rpm_max, 500),
+
+    // @Param: LIGHT_CH
+    // @DisplayName: Headlights RC channel
+    // @Description: RC channel controlling relay 3. Above 1700 turns the headlights on. The relay is forced off on failsafe.
+    // @Range: 0 16
+    // @User: Standard
+    AP_GROUPINFO("LIGHT_CH", 44, CFMotoDBW, _headlights_rc_channel, 7),
+
+    // @Param: EW_CH
+    // @DisplayName: EW payload RC channel
+    // @Description: RC channel controlling relay 4. Above 1700 turns the EW payload on. The relay is forced off on failsafe.
+    // @Range: 0 16
+    // @User: Standard
+    AP_GROUPINFO("EW_CH", 45, CFMotoDBW, _ew_rc_channel, 10),
 
     AP_GROUPEND
 };
@@ -533,6 +547,13 @@ bool CFMotoDBW::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
         AP_Relay *relay = AP::relay();
         if (relay == nullptr || !relay->enabled(4) || !relay->enabled(5)) {
             hal.util->snprintf(failure_msg, failure_msg_len, "driveline relays missing");
+            return false;
+        }
+    }
+    if (_headlights_rc_channel.get() != 0 || _ew_rc_channel.get() != 0) {
+        AP_Relay *relay = AP::relay();
+        if (relay == nullptr || !relay->enabled(2) || !relay->enabled(3)) {
+            hal.util->snprintf(failure_msg, failure_msg_len, "accessory relays missing");
             return false;
         }
     }
@@ -941,6 +962,17 @@ void CFMotoDBW::update_driveline(bool failsafe, bool throttle_is_neutral, float 
     }
 }
 
+void CFMotoDBW::update_accessories(bool failsafe)
+{
+    if (failsafe) {
+        set_relay(2, false);
+        set_relay(3, false);
+        return;
+    }
+    set_relay(2, _headlights_rc_channel.get() != 0 && rc_switch_high(_headlights_rc_channel));
+    set_relay(3, _ew_rc_channel.get() != 0 && rc_switch_high(_ew_rc_channel));
+}
+
 void CFMotoDBW::write_outputs(const Outputs &outputs) const
 {
     SRV_Channels::set_output_pwm(SRV_Channel::k_scripting1, outputs.gas_pwm);
@@ -973,6 +1005,7 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
         _shift_state = ShiftState::steady;
         update_engine(armed, failsafe, throttle_is_neutral, ground_speed, now_ms);
         update_driveline(failsafe, throttle_is_neutral, ground_speed);
+        update_accessories(failsafe);
         write_outputs(safe_outputs());
         return;
     }
@@ -989,6 +1022,7 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
         }
         update_engine(armed, failsafe, throttle_is_neutral, ground_speed, now_ms);
         update_driveline(failsafe, throttle_is_neutral, ground_speed);
+        update_accessories(failsafe);
         write_outputs(safe_outputs());
         return;
     }
@@ -997,6 +1031,7 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
         _throttle_release_required = true;
         update_engine(armed, true, throttle_is_neutral, ground_speed, now_ms);
         update_driveline(true, throttle_is_neutral, ground_speed);
+        update_accessories(true);
         write_outputs(safe_outputs());
         return;
     }
@@ -1005,6 +1040,7 @@ void CFMotoDBW::update(bool armed, bool failsafe, float throttle_pct, float grou
     update_shift(requested, throttle_is_neutral, ground_speed, now_ms);
     update_engine(armed, false, throttle_is_neutral, ground_speed, now_ms);
     update_driveline(false, throttle_is_neutral, ground_speed);
+    update_accessories(false);
 
     // Require a neutral throttle command after arming, failsafe recovery or
     // a gearbox change. This prevents motion from resuming automatically

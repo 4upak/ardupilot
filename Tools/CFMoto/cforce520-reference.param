@@ -34,10 +34,13 @@ ATV_ENG_CRANK,3000
 ATV_ENG_RETRY_D,2000
 ATV_ENG_RETRIES,2
 
-# Old RC1/RC3 mappings conflict with current steering/throttle, so 4WD and
-# differential-lock channels remain unassigned until the transmitter map is final.
-ATV_4WD_CH,0
-ATV_DIFF_CH,0
+# Non-conflicting auxiliary switches. RC8 remains the gearbox selector.
+# RC6 four-wheel drive; RC7 headlights; RC9 starter; RC10 EW payload;
+# RC11 differential lock; RC12 ignition.
+ATV_4WD_CH,6
+ATV_DIFF_CH,11
+ATV_LIGHT_CH,7
+ATV_EW_CH,10
 ATV_AXLE_SPD,0.2
 ATV_AXLE_RPM_I,0
 ATV_AXLE_RPM,500

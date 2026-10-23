@@ -94,6 +94,8 @@ private:
     AP_Float _axle_shift_speed_max;
     AP_Int8 _axle_rpm_instance;
     AP_Int32 _axle_rpm_max;
+    AP_Int8 _headlights_rc_channel;
+    AP_Int8 _ew_rc_channel;
     Gear _selected_gear;
     Gear _target_gear = Gear::neutral;
     ShiftState _shift_state = ShiftState::steady;
@@ -142,5 +144,6 @@ private:
     void update_shift(Gear requested, bool throttle_is_neutral, float ground_speed, uint32_t now_ms);
     void update_engine(bool armed, bool failsafe, bool throttle_is_neutral, float ground_speed, uint32_t now_ms);
     void update_driveline(bool failsafe, bool throttle_is_neutral, float ground_speed);
+    void update_accessories(bool failsafe);
     void set_relay(uint8_t relay_index, bool enabled) const;
 };
