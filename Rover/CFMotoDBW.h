@@ -45,6 +45,31 @@ private:
         fault,
     };
 
+    enum class CalibrationState : uint8_t {
+        idle,
+        running,
+        complete,
+        fault,
+    };
+
+    enum class CalibrationPhase : uint8_t {
+        settling_start,
+        sweeping,
+        settling_end,
+    };
+
+    struct CalibrationInterval {
+        uint16_t low_pwm = 0;
+        uint16_t high_pwm = 0;
+        uint8_t samples = 0;
+    };
+
+    struct CalibrationAggregate {
+        uint32_t low_sum[2]{};
+        uint32_t high_sum[2]{};
+        uint8_t count[2]{};
+    };
+
     struct Outputs {
         uint16_t gas_pwm;
         uint16_t brake_pwm;
@@ -106,6 +131,12 @@ private:
     AP_Int8 _brake_rc_channel;
     AP_Int8 _throttle_limit_rc_channel;
     AP_Float _throttle_limit_pct;
+    AP_Int8 _calibration_command;
+    AP_Int8 _calibration_rc_channel;
+    AP_Int16 _calibration_min_pwm;
+    AP_Int16 _calibration_max_pwm;
+    AP_Int8 _calibration_step_pwm;
+    AP_Int16 _calibration_period_ms;
     Gear _selected_gear;
     Gear _target_gear = Gear::neutral;
     ShiftState _shift_state = ShiftState::steady;
@@ -130,12 +161,36 @@ private:
     uint32_t _shift_state_started_ms = 0;
     uint32_t _engine_state_started_ms = 0;
     uint8_t _engine_retry_count = 0;
+    CalibrationState _calibration_state = CalibrationState::idle;
+    CalibrationPhase _calibration_phase = CalibrationPhase::settling_start;
+    int8_t _calibration_error = 0;
+    int8_t _calibration_direction = 1;
+    uint8_t _calibration_cycle = 0;
+    uint16_t _calibration_pwm = 1500;
+    uint32_t _calibration_next_step_ms = 0;
+    uint32_t _calibration_hold_until_ms = 0;
+    uint8_t _calibration_last_sequence = 0;
+    bool _calibration_have_sequence = false;
+    Gear _calibration_active_gear = Gear::unknown;
+    CalibrationInterval _calibration_active_interval{};
+    CalibrationInterval _calibration_leg_intervals[5]{};
+    bool _calibration_leg_seen[5]{};
+    Gear _calibration_leg_order[5]{};
+    uint8_t _calibration_leg_order_count = 0;
+    int8_t _calibration_forward_orientation = 0;
+    CalibrationAggregate _calibration_aggregate[5]{};
+    uint16_t _calibration_mean_low[5]{};
+    uint16_t _calibration_mean_high[5]{};
+    uint16_t _calibration_candidate[5]{};
 
     static constexpr uint16_t PWM_MIN = 800;
     static constexpr uint16_t PWM_MAX = 2200;
     static constexpr uint8_t TELEMETRY_PACKET_ID = 0x23;
     static constexpr uint8_t TELEMETRY_PACKET_LENGTH = 24;
     static constexpr uint16_t TELEMETRY_PUBLISH_PERIOD_MS = 500;
+    static constexpr uint8_t CALIBRATION_CYCLES = 5;
+    static constexpr uint16_t CALIBRATION_ENDPOINT_HOLD_MS = 1000;
+    static constexpr uint8_t CALIBRATION_MIN_SAMPLES = 2;
 
     [[nodiscard]] uint16_t constrained_pwm(const AP_Int16 &parameter) const;
     [[nodiscard]] uint16_t interpolate_pwm(uint16_t from_pwm, uint16_t to_pwm, float ratio) const;
@@ -156,12 +211,28 @@ private:
     [[nodiscard]] bool shift_requires_neutral(Gear from, Gear to) const;
     [[nodiscard]] Gear decode_gear(uint16_t dio) const;
     [[nodiscard]] static int8_t gear_code(Gear gear);
+    [[nodiscard]] static uint8_t gear_index(Gear gear);
     [[nodiscard]] Outputs safe_outputs() const;
     [[nodiscard]] Outputs active_outputs(float gas_pct, float brake_pct) const;
     void update_telemetry();
     void parse_telemetry_byte(uint8_t byte);
     void accept_telemetry_packet();
     void publish_telemetry(uint32_t now_ms);
+    void publish_calibration() const;
+    [[nodiscard]] bool telemetry_stream_fresh() const;
+    [[nodiscard]] bool calibration_deadman() const;
+    [[nodiscard]] bool calibration_engine_stopped() const;
+    [[nodiscard]] bool calibration_safety_ok(bool armed, bool failsafe, bool throttle_is_neutral,
+                                             float ground_speed, int8_t &error) const;
+    void reset_calibration_leg();
+    void start_calibration(uint32_t now_ms);
+    void abort_calibration(int8_t error);
+    void record_calibration_sample();
+    [[nodiscard]] bool finish_calibration_interval();
+    [[nodiscard]] bool finish_calibration_leg(uint32_t now_ms);
+    [[nodiscard]] bool finish_calibration();
+    [[nodiscard]] bool update_calibration(bool armed, bool failsafe, bool throttle_is_neutral,
+                                          float ground_speed, uint32_t now_ms);
     void write_outputs(const Outputs &outputs) const;
     void start_shift(Gear target, uint32_t now_ms);
     void update_shift(Gear requested, bool throttle_is_neutral, float ground_speed, uint32_t now_ms);

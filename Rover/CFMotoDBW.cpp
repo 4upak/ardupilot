@@ -449,6 +449,52 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("THR_LIM", 55, CFMotoDBW, _throttle_limit_pct, 50),
 
+    // @Param: CAL_CMD
+    // @DisplayName: Gearbox calibration command
+    // @Description: One-shot command. Set to 1 to start or 2 to abort a guarded gearbox PWM sweep. The firmware resets this parameter to zero after consuming it.
+    // @Values: 0:Idle,1:Start,2:Abort
+    // @User: Advanced
+    AP_GROUPINFO("CAL_CMD", 56, CFMotoDBW, _calibration_command, 0),
+
+    // @Param: CAL_CH
+    // @DisplayName: Gearbox calibration dead-man RC channel
+    // @Description: RC channel that must remain above 1700 PWM throughout calibration. Loss of the dashboard heartbeat releases this channel and aborts the sweep.
+    // @Range: 1 16
+    // @User: Advanced
+    AP_GROUPINFO("CAL_CH", 57, CFMotoDBW, _calibration_rc_channel, 16),
+
+    // @Param: CAL_MIN
+    // @DisplayName: Gearbox calibration minimum PWM
+    // @Description: Lower endpoint of the gearbox actuator calibration sweep.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @User: Advanced
+    AP_GROUPINFO("CAL_MIN", 58, CFMotoDBW, _calibration_min_pwm, 1000),
+
+    // @Param: CAL_MAX
+    // @DisplayName: Gearbox calibration maximum PWM
+    // @Description: Upper endpoint of the gearbox actuator calibration sweep.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @User: Advanced
+    AP_GROUPINFO("CAL_MAX", 59, CFMotoDBW, _calibration_max_pwm, 2000),
+
+    // @Param: CAL_STEP
+    // @DisplayName: Gearbox calibration PWM step
+    // @Description: PWM increment applied at each calibration timer tick.
+    // @Units: PWM
+    // @Range: 1 20
+    // @User: Advanced
+    AP_GROUPINFO("CAL_STEP", 60, CFMotoDBW, _calibration_step_pwm, 1),
+
+    // @Param: CAL_MS
+    // @DisplayName: Gearbox calibration step period
+    // @Description: Time between PWM increments during the calibration sweep.
+    // @Units: ms
+    // @Range: 10 500
+    // @User: Advanced
+    AP_GROUPINFO("CAL_MS", 61, CFMotoDBW, _calibration_period_ms, 20),
+
     AP_GROUPEND
 };
 
@@ -819,6 +865,12 @@ int8_t CFMotoDBW::gear_code(Gear gear)
     return -1;
 }
 
+uint8_t CFMotoDBW::gear_index(Gear gear)
+{
+    const int8_t code = gear_code(gear);
+    return code >= 0 ? static_cast<uint8_t>(code) : 5;
+}
+
 CFMotoDBW::Outputs CFMotoDBW::safe_outputs() const
 {
     return {
@@ -952,6 +1004,395 @@ void CFMotoDBW::publish_telemetry(uint32_t now_ms)
     gcs().send_named_int("GB_VALID", static_cast<int32_t>(_telemetry_valid_packets));
     gcs().send_named_int("GB_BAD", static_cast<int32_t>(_telemetry_bad_packets));
     gcs().send_named_int("GB_AGE", age_ms);
+    publish_calibration();
+}
+
+void CFMotoDBW::publish_calibration() const
+{
+    gcs().send_named_int("GC_STATE", static_cast<int8_t>(_calibration_state));
+    gcs().send_named_int("GC_ERROR", _calibration_error);
+    if (_calibration_state == CalibrationState::idle) {
+        return;
+    }
+
+    gcs().send_named_int("GC_CYCLE", _calibration_cycle);
+    gcs().send_named_int("GC_DIR", _calibration_direction);
+    gcs().send_named_int("GC_PHASE", static_cast<int8_t>(_calibration_phase));
+    gcs().send_named_int("GC_PWM", _calibration_pwm);
+    gcs().send_named_int("GC_GEAR", gear_code(_telemetry_gear));
+
+    const uint16_t minimum = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
+    const uint16_t maximum = static_cast<uint16_t>(constrain_int16(_calibration_max_pwm.get(), PWM_MIN, PWM_MAX));
+    const uint16_t span = maximum > minimum ? maximum - minimum : 1;
+    const uint8_t completed_legs = static_cast<uint8_t>((MAX(_calibration_cycle, 1) - 1) * 2 +
+                                                        (_calibration_direction < 0 ? 1 : 0));
+    const uint16_t leg_progress = _calibration_direction > 0 ?
+                                  static_cast<uint16_t>(constrain_int16(_calibration_pwm - minimum, 0, span)) :
+                                  static_cast<uint16_t>(constrain_int16(maximum - _calibration_pwm, 0, span));
+    const uint32_t progress = (static_cast<uint32_t>(completed_legs) * span + leg_progress) * 1000U /
+                              (static_cast<uint32_t>(CALIBRATION_CYCLES) * 2U * span);
+    gcs().send_named_int("GC_PROG", static_cast<int32_t>(MIN(progress, 1000U)));
+
+    static const char low_names[][8] {"GC_P_LO", "GC_R_LO", "GC_N_LO", "GC_H_LO", "GC_L_LO"};
+    static const char high_names[][8] {"GC_P_HI", "GC_R_HI", "GC_N_HI", "GC_H_HI", "GC_L_HI"};
+    static const char pwm_names[][9] {"GC_P_PWM", "GC_R_PWM", "GC_N_PWM", "GC_H_PWM", "GC_L_PWM"};
+    for (uint8_t i = 0; i < 5; i++) {
+        gcs().send_named_int(low_names[i], _calibration_mean_low[i]);
+        gcs().send_named_int(high_names[i], _calibration_mean_high[i]);
+        gcs().send_named_int(pwm_names[i], _calibration_candidate[i]);
+    }
+}
+
+bool CFMotoDBW::telemetry_stream_fresh() const
+{
+    if (!telemetry_enabled() || _last_telemetry_ms == 0) {
+        return false;
+    }
+    const uint32_t timeout_ms = static_cast<uint32_t>(constrain_int16(_telemetry_timeout_ms.get(), 250, 5000));
+    return AP_HAL::millis() - _last_telemetry_ms <= timeout_ms;
+}
+
+bool CFMotoDBW::calibration_deadman() const
+{
+    return rc_switch_high(_calibration_rc_channel);
+}
+
+bool CFMotoDBW::calibration_engine_stopped() const
+{
+    const int8_t instance = _engine_rpm_instance.get();
+    AP_RPM *rpm = AP::rpm();
+    float value = 0.0f;
+    if (rpm == nullptr || instance < 1 || instance > 2 ||
+        !rpm->get_rpm(static_cast<uint8_t>(instance - 1), value) || fabsf(value) >= 50.0f) {
+        return false;
+    }
+
+    AP_Relay *relay = AP::relay();
+    return relay != nullptr && !relay->get(1) && !relay->get(2) && !relay->get(3);
+}
+
+bool CFMotoDBW::calibration_safety_ok(bool armed, bool failsafe, bool throttle_is_neutral,
+                                      float ground_speed, int8_t &error) const
+{
+    error = 0;
+    if (armed) {
+        error = 1;
+    } else if (failsafe) {
+        error = 2;
+    } else if (_enable.get() != 0) {
+        error = 3;
+    } else if (!calibration_deadman()) {
+        error = 4;
+    } else if (!throttle_is_neutral) {
+        error = 5;
+    } else if (!isfinite(ground_speed) || fabsf(ground_speed) > MAX(_shift_speed_max.get(), 0.0f)) {
+        error = 6;
+    } else if (!telemetry_stream_fresh()) {
+        error = 7;
+    } else if (!calibration_engine_stopped()) {
+        error = 8;
+    } else if (!SRV_Channels::function_assigned(SRV_Channel::k_scripting3)) {
+        error = 9;
+    } else {
+        const int16_t minimum = constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX);
+        const int16_t maximum = constrain_int16(_calibration_max_pwm.get(), PWM_MIN, PWM_MAX);
+        const int8_t step = constrain_int16(_calibration_step_pwm.get(), 1, 20);
+        const int16_t period = constrain_int16(_calibration_period_ms.get(), 10, 500);
+        if (maximum - minimum < 200 || step < 1 || period < 10) {
+            error = 10;
+        }
+    }
+    return error == 0;
+}
+
+void CFMotoDBW::reset_calibration_leg()
+{
+    _calibration_active_gear = Gear::unknown;
+    _calibration_active_interval = {};
+    _calibration_leg_order_count = 0;
+    for (uint8_t i = 0; i < 5; i++) {
+        _calibration_leg_intervals[i] = {};
+        _calibration_leg_seen[i] = false;
+        _calibration_leg_order[i] = Gear::unknown;
+    }
+}
+
+void CFMotoDBW::start_calibration(uint32_t now_ms)
+{
+    _calibration_state = CalibrationState::running;
+    _calibration_phase = CalibrationPhase::settling_start;
+    _calibration_error = 0;
+    _calibration_direction = 1;
+    _calibration_cycle = 1;
+    _calibration_pwm = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
+    _calibration_hold_until_ms = now_ms + CALIBRATION_ENDPOINT_HOLD_MS;
+    _calibration_next_step_ms = _calibration_hold_until_ms;
+    _calibration_last_sequence = _telemetry_sequence;
+    _calibration_have_sequence = true;
+    _calibration_forward_orientation = 0;
+    reset_calibration_leg();
+    for (uint8_t i = 0; i < 5; i++) {
+        _calibration_aggregate[i] = {};
+        _calibration_mean_low[i] = 0;
+        _calibration_mean_high[i] = 0;
+        _calibration_candidate[i] = 0;
+    }
+    gcs().send_text(MAV_SEVERITY_NOTICE, "Gearbox calibration started");
+}
+
+void CFMotoDBW::abort_calibration(int8_t error)
+{
+    _calibration_state = CalibrationState::fault;
+    _calibration_error = error;
+    _calibration_active_gear = Gear::unknown;
+    gcs().send_text(MAV_SEVERITY_WARNING, "Gearbox calibration stopped (%d)", static_cast<int>(error));
+}
+
+bool CFMotoDBW::finish_calibration_interval()
+{
+    if (_calibration_active_gear == Gear::unknown) {
+        return true;
+    }
+    const uint8_t index = gear_index(_calibration_active_gear);
+    if (index >= 5 || _calibration_active_interval.samples < CALIBRATION_MIN_SAMPLES ||
+        _calibration_leg_seen[index] || _calibration_leg_order_count >= 5) {
+        return false;
+    }
+    _calibration_leg_intervals[index] = _calibration_active_interval;
+    _calibration_leg_seen[index] = true;
+    _calibration_leg_order[_calibration_leg_order_count++] = _calibration_active_gear;
+    _calibration_active_gear = Gear::unknown;
+    _calibration_active_interval = {};
+    return true;
+}
+
+void CFMotoDBW::record_calibration_sample()
+{
+    if (_calibration_have_sequence && _telemetry_sequence == _calibration_last_sequence) {
+        return;
+    }
+    _calibration_last_sequence = _telemetry_sequence;
+    _calibration_have_sequence = true;
+
+    const Gear gear = _telemetry_gear;
+    if (gear == Gear::unknown) {
+        if (!finish_calibration_interval()) {
+            abort_calibration(11);
+        }
+        return;
+    }
+    if (gear == _calibration_active_gear) {
+        _calibration_active_interval.low_pwm = MIN(_calibration_active_interval.low_pwm, _calibration_pwm);
+        _calibration_active_interval.high_pwm = MAX(_calibration_active_interval.high_pwm, _calibration_pwm);
+        if (_calibration_active_interval.samples < UINT8_MAX) {
+            _calibration_active_interval.samples++;
+        }
+        return;
+    }
+    if (!finish_calibration_interval()) {
+        abort_calibration(11);
+        return;
+    }
+
+    const uint8_t index = gear_index(gear);
+    if (index >= 5 || _calibration_leg_seen[index]) {
+        abort_calibration(12);
+        return;
+    }
+    _calibration_active_gear = gear;
+    _calibration_active_interval.low_pwm = _calibration_pwm;
+    _calibration_active_interval.high_pwm = _calibration_pwm;
+    _calibration_active_interval.samples = 1;
+}
+
+bool CFMotoDBW::finish_calibration()
+{
+    for (uint8_t i = 0; i < 5; i++) {
+        const CalibrationAggregate &aggregate = _calibration_aggregate[i];
+        if (aggregate.count[0] != CALIBRATION_CYCLES || aggregate.count[1] != CALIBRATION_CYCLES) {
+            return false;
+        }
+        const uint32_t divisor = static_cast<uint32_t>(CALIBRATION_CYCLES) * 2U;
+        _calibration_mean_low[i] = static_cast<uint16_t>((aggregate.low_sum[0] + aggregate.low_sum[1] + divisor / 2U) / divisor);
+        _calibration_mean_high[i] = static_cast<uint16_t>((aggregate.high_sum[0] + aggregate.high_sum[1] + divisor / 2U) / divisor);
+        if (_calibration_mean_low[i] > _calibration_mean_high[i]) {
+            return false;
+        }
+        _calibration_candidate[i] = static_cast<uint16_t>((static_cast<uint32_t>(_calibration_mean_low[i]) +
+                                                           _calibration_mean_high[i] + 1U) / 2U);
+    }
+
+    for (uint8_t i = 0; i < 5; i++) {
+        for (uint8_t j = i + 1; j < 5; j++) {
+            if (_calibration_candidate[i] == _calibration_candidate[j]) {
+                return false;
+            }
+        }
+    }
+    const int8_t orientation = _calibration_forward_orientation;
+    for (uint8_t i = 1; i < 5; i++) {
+        const uint8_t previous = orientation > 0 ? i - 1 : 5 - i;
+        const uint8_t current = orientation > 0 ? i : 4 - i;
+        if (_calibration_candidate[previous] >= _calibration_candidate[current]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CFMotoDBW::finish_calibration_leg(uint32_t now_ms)
+{
+    if (!finish_calibration_interval() || _calibration_leg_order_count != 5) {
+        abort_calibration(13);
+        return false;
+    }
+    for (uint8_t i = 0; i < 5; i++) {
+        if (!_calibration_leg_seen[i]) {
+            abort_calibration(13);
+            return false;
+        }
+    }
+
+    const Gear forward_order[] {Gear::park, Gear::reverse, Gear::neutral, Gear::high, Gear::low};
+    bool normal = true;
+    bool reverse = true;
+    for (uint8_t i = 0; i < 5; i++) {
+        normal &= _calibration_leg_order[i] == forward_order[i];
+        reverse &= _calibration_leg_order[i] == forward_order[4 - i];
+    }
+    if (!normal && !reverse) {
+        abort_calibration(14);
+        return false;
+    }
+    const int8_t orientation = normal ? 1 : -1;
+    if (_calibration_forward_orientation == 0 && _calibration_direction > 0) {
+        _calibration_forward_orientation = orientation;
+    }
+    const int8_t expected_orientation = _calibration_direction > 0 ?
+                                        _calibration_forward_orientation : -_calibration_forward_orientation;
+    if (orientation != expected_orientation) {
+        abort_calibration(14);
+        return false;
+    }
+
+    const uint8_t direction_index = _calibration_direction > 0 ? 0 : 1;
+    for (uint8_t i = 0; i < 5; i++) {
+        CalibrationAggregate &aggregate = _calibration_aggregate[i];
+        aggregate.low_sum[direction_index] += _calibration_leg_intervals[i].low_pwm;
+        aggregate.high_sum[direction_index] += _calibration_leg_intervals[i].high_pwm;
+        aggregate.count[direction_index]++;
+    }
+
+    if (_calibration_direction > 0) {
+        _calibration_direction = -1;
+        _calibration_pwm = static_cast<uint16_t>(constrain_int16(_calibration_max_pwm.get(), PWM_MIN, PWM_MAX));
+    } else if (_calibration_cycle < CALIBRATION_CYCLES) {
+        _calibration_cycle++;
+        _calibration_direction = 1;
+        _calibration_pwm = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
+    } else {
+        if (!finish_calibration()) {
+            abort_calibration(15);
+            return false;
+        }
+        _calibration_state = CalibrationState::complete;
+        _calibration_error = 0;
+        gcs().send_text(MAV_SEVERITY_NOTICE, "Gearbox calibration complete");
+        return false;
+    }
+
+    _calibration_phase = CalibrationPhase::settling_start;
+    _calibration_hold_until_ms = now_ms + CALIBRATION_ENDPOINT_HOLD_MS;
+    _calibration_next_step_ms = _calibration_hold_until_ms;
+    _calibration_last_sequence = _telemetry_sequence;
+    _calibration_have_sequence = true;
+    reset_calibration_leg();
+    return true;
+}
+
+bool CFMotoDBW::update_calibration(bool armed, bool failsafe, bool throttle_is_neutral,
+                                   float ground_speed, uint32_t now_ms)
+{
+    const int8_t command = _calibration_command.get();
+    if (command != 0) {
+        _calibration_command.set_and_save(0);
+        if (command == 2) {
+            abort_calibration(16);
+        } else if (command == 1) {
+            int8_t error = 0;
+            if (_calibration_state == CalibrationState::running ||
+                !calibration_safety_ok(armed, failsafe, throttle_is_neutral, ground_speed, error)) {
+                abort_calibration(error == 0 ? 17 : error);
+            } else {
+                start_calibration(now_ms);
+            }
+        }
+    }
+
+    if (_calibration_state == CalibrationState::complete) {
+        return calibration_deadman();
+    }
+    if (_calibration_state != CalibrationState::running) {
+        return false;
+    }
+
+    int8_t error = 0;
+    if (!calibration_safety_ok(armed, failsafe, throttle_is_neutral, ground_speed, error)) {
+        abort_calibration(error);
+        return false;
+    }
+
+    set_relay(1, false);
+    set_relay(2, false);
+    set_relay(3, false);
+
+    if (_calibration_phase == CalibrationPhase::settling_start) {
+        if (now_ms >= _calibration_hold_until_ms) {
+            _calibration_phase = CalibrationPhase::sweeping;
+            _calibration_next_step_ms = now_ms;
+            _calibration_last_sequence = _telemetry_sequence;
+            _calibration_have_sequence = true;
+            reset_calibration_leg();
+        }
+        return true;
+    }
+
+    record_calibration_sample();
+    if (_calibration_state != CalibrationState::running) {
+        return false;
+    }
+
+    if (_calibration_phase == CalibrationPhase::settling_end) {
+        if (now_ms >= _calibration_hold_until_ms) {
+            return finish_calibration_leg(now_ms);
+        }
+        return true;
+    }
+
+    if (now_ms < _calibration_next_step_ms) {
+        return true;
+    }
+    const uint16_t minimum = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
+    const uint16_t maximum = static_cast<uint16_t>(constrain_int16(_calibration_max_pwm.get(), PWM_MIN, PWM_MAX));
+    const uint16_t step = static_cast<uint16_t>(constrain_int16(_calibration_step_pwm.get(), 1, 20));
+    const uint16_t period = static_cast<uint16_t>(constrain_int16(_calibration_period_ms.get(), 10, 500));
+    _calibration_next_step_ms = now_ms + period;
+
+    if (_calibration_direction > 0) {
+        _calibration_pwm = MIN(static_cast<uint16_t>(_calibration_pwm + step), maximum);
+        if (_calibration_pwm >= maximum) {
+            _calibration_phase = CalibrationPhase::settling_end;
+            _calibration_hold_until_ms = now_ms + CALIBRATION_ENDPOINT_HOLD_MS;
+        }
+    } else {
+        _calibration_pwm = _calibration_pwm > minimum + step ?
+                           static_cast<uint16_t>(_calibration_pwm - step) : minimum;
+        if (_calibration_pwm <= minimum) {
+            _calibration_phase = CalibrationPhase::settling_end;
+            _calibration_hold_until_ms = now_ms + CALIBRATION_ENDPOINT_HOLD_MS;
+        }
+    }
+    return true;
 }
 
 void CFMotoDBW::set_relay(uint8_t relay_index, bool enabled) const
@@ -1185,6 +1626,19 @@ void CFMotoDBW::update(bool armed, bool failsafe, float ground_speed)
     const float gas_pct = rc_channel_positive_pct(_gas_rc_channel);
     const float brake_pct = rc_channel_positive_pct(_brake_rc_channel);
     const bool throttle_is_neutral = gas_pct <= deadzone && brake_pct <= deadzone;
+
+    if (update_calibration(armed, failsafe, throttle_is_neutral, ground_speed, now_ms)) {
+        _throttle_release_required = true;
+        set_relay(1, false);
+        set_relay(2, false);
+        set_relay(3, false);
+        write_outputs({
+            constrained_pwm(_gas_idle_pwm),
+            constrained_pwm(_brake_hold_pwm),
+            _calibration_pwm,
+        });
+        return;
+    }
 
     if (_enable.get() == 0) {
         _throttle_release_required = true;
