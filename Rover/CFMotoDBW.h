@@ -114,7 +114,15 @@ private:
     AP_HAL::UARTDriver *_telemetry_uart = nullptr;
     uint32_t _last_telemetry_ms = 0;
     uint8_t _telemetry_buffer[24]{};
+    uint16_t _telemetry_dio = 0;
+    uint16_t _telemetry_previous_dio = 0;
+    uint16_t _telemetry_adc[7]{};
+    uint16_t _telemetry_nano_rx_count = 0;
+    uint32_t _telemetry_valid_packets = 0;
+    uint32_t _telemetry_bad_packets = 0;
+    uint32_t _last_telemetry_publish_ms = 0;
     uint8_t _telemetry_offset = 0;
+    uint8_t _telemetry_sequence = 0;
     bool _throttle_release_required = true;
     bool _fourwd_enabled = false;
     bool _diff_lock_enabled = false;
@@ -127,6 +135,7 @@ private:
     static constexpr uint16_t PWM_MAX = 2200;
     static constexpr uint8_t TELEMETRY_PACKET_ID = 0x23;
     static constexpr uint8_t TELEMETRY_PACKET_LENGTH = 24;
+    static constexpr uint16_t TELEMETRY_PUBLISH_PERIOD_MS = 500;
 
     [[nodiscard]] uint16_t constrained_pwm(const AP_Int16 &parameter) const;
     [[nodiscard]] uint16_t interpolate_pwm(uint16_t from_pwm, uint16_t to_pwm, float ratio) const;
@@ -146,11 +155,13 @@ private:
     [[nodiscard]] bool shift_timed_out(uint32_t now_ms) const;
     [[nodiscard]] bool shift_requires_neutral(Gear from, Gear to) const;
     [[nodiscard]] Gear decode_gear(uint16_t dio) const;
+    [[nodiscard]] static int8_t gear_code(Gear gear);
     [[nodiscard]] Outputs safe_outputs() const;
     [[nodiscard]] Outputs active_outputs(float gas_pct, float brake_pct) const;
     void update_telemetry();
     void parse_telemetry_byte(uint8_t byte);
     void accept_telemetry_packet();
+    void publish_telemetry(uint32_t now_ms);
     void write_outputs(const Outputs &outputs) const;
     void start_shift(Gear target, uint32_t now_ms);
     void update_shift(Gear requested, bool throttle_is_neutral, float ground_speed, uint32_t now_ms);

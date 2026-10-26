@@ -1,6 +1,7 @@
 #include "CFMotoDBW.h"
 
 #include <AP_HAL/AP_HAL.h>
+#include <GCS_MAVLink/GCS.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_Relay/AP_Relay.h>
 #include <AP_RPM/AP_RPM.h>
@@ -799,6 +800,25 @@ CFMotoDBW::Gear CFMotoDBW::decode_gear(uint16_t dio) const
     return match_count == 1 ? match : Gear::unknown;
 }
 
+int8_t CFMotoDBW::gear_code(Gear gear)
+{
+    switch (gear) {
+    case Gear::park:
+        return 0;
+    case Gear::reverse:
+        return 1;
+    case Gear::neutral:
+        return 2;
+    case Gear::high:
+        return 3;
+    case Gear::low:
+        return 4;
+    case Gear::unknown:
+        return -1;
+    }
+    return -1;
+}
+
 CFMotoDBW::Outputs CFMotoDBW::safe_outputs() const
 {
     return {
@@ -843,17 +863,21 @@ void CFMotoDBW::update_telemetry()
     if (_telemetry_uart == nullptr) {
         init();
     }
-    if (_telemetry_uart == nullptr) {
-        return;
+    if (_telemetry_uart != nullptr) {
+        int16_t bytes_available = MIN(_telemetry_uart->available(), 128);
+        while (bytes_available-- > 0) {
+            const int16_t value = _telemetry_uart->read();
+            if (value < 0) {
+                break;
+            }
+            parse_telemetry_byte(static_cast<uint8_t>(value));
+        }
     }
 
-    int16_t bytes_available = MIN(_telemetry_uart->available(), 128);
-    while (bytes_available-- > 0) {
-        const int16_t value = _telemetry_uart->read();
-        if (value < 0) {
-            break;
-        }
-        parse_telemetry_byte(static_cast<uint8_t>(value));
+    const uint32_t now_ms = AP_HAL::millis();
+    if (now_ms - _last_telemetry_publish_ms >= TELEMETRY_PUBLISH_PERIOD_MS) {
+        _last_telemetry_publish_ms = now_ms;
+        publish_telemetry(now_ms);
     }
 }
 
@@ -868,6 +892,7 @@ void CFMotoDBW::parse_telemetry_byte(uint8_t byte)
 
     _telemetry_buffer[_telemetry_offset++] = byte;
     if (_telemetry_offset == 2 && _telemetry_buffer[1] != TELEMETRY_PACKET_LENGTH) {
+        _telemetry_bad_packets++;
         _telemetry_offset = byte == TELEMETRY_PACKET_ID ? 1 : 0;
         if (_telemetry_offset == 1) {
             _telemetry_buffer[0] = byte;
@@ -885,16 +910,48 @@ void CFMotoDBW::parse_telemetry_byte(uint8_t byte)
     }
     if (checksum == _telemetry_buffer[TELEMETRY_PACKET_LENGTH - 1]) {
         accept_telemetry_packet();
+    } else {
+        _telemetry_bad_packets++;
     }
     _telemetry_offset = 0;
 }
 
 void CFMotoDBW::accept_telemetry_packet()
 {
-    const uint16_t dio = static_cast<uint16_t>(_telemetry_buffer[2]) |
-                         static_cast<uint16_t>(_telemetry_buffer[3]) << 8;
-    _telemetry_gear = decode_gear(dio);
+    _telemetry_dio = static_cast<uint16_t>(_telemetry_buffer[2]) |
+                     static_cast<uint16_t>(_telemetry_buffer[3]) << 8;
+    _telemetry_previous_dio = static_cast<uint16_t>(_telemetry_buffer[4]) |
+                              static_cast<uint16_t>(_telemetry_buffer[5]) << 8;
+    for (uint8_t i = 0; i < ARRAY_SIZE(_telemetry_adc); i++) {
+        const uint8_t offset = 6 + i * 2;
+        _telemetry_adc[i] = static_cast<uint16_t>(_telemetry_buffer[offset]) |
+                            static_cast<uint16_t>(_telemetry_buffer[offset + 1]) << 8;
+    }
+    _telemetry_nano_rx_count = static_cast<uint16_t>(_telemetry_buffer[20]) |
+                               static_cast<uint16_t>(_telemetry_buffer[21]) << 8;
+    _telemetry_sequence = _telemetry_buffer[22];
+    _telemetry_gear = decode_gear(_telemetry_dio);
     _last_telemetry_ms = AP_HAL::millis();
+    _telemetry_valid_packets++;
+}
+
+void CFMotoDBW::publish_telemetry(uint32_t now_ms)
+{
+    const int32_t age_ms = _last_telemetry_ms == 0 ? -1 :
+                           static_cast<int32_t>(now_ms - _last_telemetry_ms);
+    gcs().send_named_int("GB_HEALTH", telemetry_healthy() ? 1 : 0);
+    gcs().send_named_int("GB_GEAR", gear_code(_telemetry_gear));
+    gcs().send_named_int("GB_DIO", _telemetry_dio);
+    gcs().send_named_int("GB_PREV", _telemetry_previous_dio);
+    const char names[][6] {"GB_A0", "GB_A1", "GB_A2", "GB_A3", "GB_A4", "GB_A5", "GB_A6"};
+    for (uint8_t i = 0; i < ARRAY_SIZE(_telemetry_adc); i++) {
+        gcs().send_named_int(names[i], _telemetry_adc[i]);
+    }
+    gcs().send_named_int("GB_RXCNT", _telemetry_nano_rx_count);
+    gcs().send_named_int("GB_SEQ", _telemetry_sequence);
+    gcs().send_named_int("GB_VALID", static_cast<int32_t>(_telemetry_valid_packets));
+    gcs().send_named_int("GB_BAD", static_cast<int32_t>(_telemetry_bad_packets));
+    gcs().send_named_int("GB_AGE", age_ms);
 }
 
 void CFMotoDBW::set_relay(uint8_t relay_index, bool enabled) const
