@@ -771,13 +771,13 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("RC_OPTIONS", 8224);
     AP_Param::set_default_by_name("RSSI_TYPE", 3);
 
-    // CFMOTO relay harness: ignition and starter on MAIN5/MAIN6, with
+    // CFMOTO relay harness: ignition and starter on MAIN6/MAIN5, with
     // four-wheel drive and differential lock on AUX3/AUX4. All default OFF.
     AP_Param::set_default_by_name("RELAY1_FUNCTION", 1);
-    AP_Param::set_default_by_name("RELAY1_PIN", 105);
+    AP_Param::set_default_by_name("RELAY1_PIN", 106);
     AP_Param::set_default_by_name("RELAY1_DEFAULT", 0);
     AP_Param::set_default_by_name("RELAY2_FUNCTION", 1);
-    AP_Param::set_default_by_name("RELAY2_PIN", 106);
+    AP_Param::set_default_by_name("RELAY2_PIN", 105);
     AP_Param::set_default_by_name("RELAY2_DEFAULT", 0);
     AP_Param::set_default_by_name("RELAY3_FUNCTION", 1);
     AP_Param::set_default_by_name("RELAY3_PIN", 52);

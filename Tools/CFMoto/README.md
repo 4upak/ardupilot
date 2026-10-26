@@ -8,8 +8,8 @@ proof that a mechanism is safe to move.
 
 | Relay | Function | Pixhawk pin |
 |---:|---|---:|
-| 1 | ignition (MAIN5) | 105 |
-| 2 | starter (MAIN6) | 106 |
+| 1 | ignition (MAIN6) | 106 |
+| 2 | starter (MAIN5) | 105 |
 | 3 | four-wheel drive (AUX3) | 52 |
 | 4 | differential lock (AUX4) | 53 |
 | 5 | disabled | -1 |
@@ -49,8 +49,8 @@ stopped clears it through the same feedback check.
 Starting requires an armed vehicle, neutral throttle, stopped speed, P or N,
 valid gearbox feedback, and a configured engine RPM input. The starter has an
 ignition delay, maximum crank time, retry delay and retry limit; reaching the
-running RPM threshold releases it immediately. Relay 1 is MAIN5 and relay 2 is
-MAIN6. Keep the feature disabled until relay polarity and engine RPM identity
+running RPM threshold releases it immediately. Relay 1 is MAIN6 and relay 2 is
+MAIN5. Keep the feature disabled until relay polarity and engine RPM identity
 are measured.
 
 `MAUL_4WD_CH` and `MAUL_DIFF_CH` control relays 3 and 4 only while throttle,
