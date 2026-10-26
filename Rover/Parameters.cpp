@@ -771,13 +771,13 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("RC_OPTIONS", 8224);
     AP_Param::set_default_by_name("RSSI_TYPE", 3);
 
-    // CFMOTO relay harness: ignition, starter, headlights, EW payload,
-    // differential lock and four-wheel drive. All default OFF.
+    // CFMOTO relay harness: ignition and starter on MAIN5/MAIN6, with
+    // four-wheel drive and differential lock on AUX3/AUX4. All default OFF.
     AP_Param::set_default_by_name("RELAY1_FUNCTION", 1);
-    AP_Param::set_default_by_name("RELAY1_PIN", 50);
+    AP_Param::set_default_by_name("RELAY1_PIN", 105);
     AP_Param::set_default_by_name("RELAY1_DEFAULT", 0);
     AP_Param::set_default_by_name("RELAY2_FUNCTION", 1);
-    AP_Param::set_default_by_name("RELAY2_PIN", 51);
+    AP_Param::set_default_by_name("RELAY2_PIN", 106);
     AP_Param::set_default_by_name("RELAY2_DEFAULT", 0);
     AP_Param::set_default_by_name("RELAY3_FUNCTION", 1);
     AP_Param::set_default_by_name("RELAY3_PIN", 52);
@@ -785,18 +785,18 @@ void Rover::load_parameters(void)
     AP_Param::set_default_by_name("RELAY4_FUNCTION", 1);
     AP_Param::set_default_by_name("RELAY4_PIN", 53);
     AP_Param::set_default_by_name("RELAY4_DEFAULT", 0);
-    AP_Param::set_default_by_name("RELAY5_FUNCTION", 1);
-    AP_Param::set_default_by_name("RELAY5_PIN", 105);
+    AP_Param::set_default_by_name("RELAY5_FUNCTION", 0);
+    AP_Param::set_default_by_name("RELAY5_PIN", -1);
     AP_Param::set_default_by_name("RELAY5_DEFAULT", 0);
-    AP_Param::set_default_by_name("RELAY6_FUNCTION", 1);
-    AP_Param::set_default_by_name("RELAY6_PIN", 106);
+    AP_Param::set_default_by_name("RELAY6_FUNCTION", 0);
+    AP_Param::set_default_by_name("RELAY6_PIN", -1);
     AP_Param::set_default_by_name("RELAY6_DEFAULT", 0);
     // Relay GPIOs share physical pins with these servo outputs. Disable the
     // servo functions so AP_Relay owns the pins without an output conflict.
     AP_Param::set_default_by_name("SERVO5_FUNCTION", -1);
     AP_Param::set_default_by_name("SERVO6_FUNCTION", -1);
-    AP_Param::set_default_by_name("SERVO9_FUNCTION", -1);
-    AP_Param::set_default_by_name("SERVO10_FUNCTION", -1);
+    AP_Param::set_default_by_name("SERVO9_FUNCTION", 0);
+    AP_Param::set_default_by_name("SERVO10_FUNCTION", 0);
     AP_Param::set_default_by_name("SERVO11_FUNCTION", -1);
     AP_Param::set_default_by_name("SERVO12_FUNCTION", -1);
 

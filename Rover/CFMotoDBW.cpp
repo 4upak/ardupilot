@@ -321,14 +321,14 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
 
     // @Param: 4WD_CH
     // @DisplayName: Four-wheel-drive RC channel
-    // @Description: RC channel requesting relay 6 above 1700 PWM. Zero disables automatic 4WD relay control.
+    // @Description: RC channel requesting relay 3 on AUX3 above 1700 PWM. Zero disables automatic 4WD relay control.
     // @Range: 0 16
     // @User: Standard
     AP_GROUPINFO("4WD_CH", 39, CFMotoDBW, _fourwd_rc_channel, 7),
 
     // @Param: DIFF_CH
     // @DisplayName: Differential-lock RC channel
-    // @Description: RC channel requesting relay 5 above 1700 PWM. Differential lock is applied only while 4WD is enabled.
+    // @Description: RC channel requesting relay 4 on AUX4 above 1700 PWM. Differential lock is applied only while 4WD is enabled.
     // @Range: 0 16
     // @User: Standard
     AP_GROUPINFO("DIFF_CH", 40, CFMotoDBW, _diff_lock_rc_channel, 10),
@@ -357,18 +357,18 @@ const AP_Param::GroupInfo CFMotoDBW::var_info[] = {
     AP_GROUPINFO("AXLE_RPM", 43, CFMotoDBW, _axle_rpm_max, 500),
 
     // @Param: LIGHT_CH
-    // @DisplayName: Headlights RC channel
-    // @Description: RC channel controlling relay 3. Above 1700 turns the headlights on. The relay is forced off on failsafe.
+    // @DisplayName: Deprecated headlights RC channel
+    // @Description: Deprecated because AUX3 is reserved for four-wheel drive. This parameter has no effect.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("LIGHT_CH", 44, CFMotoDBW, _headlights_rc_channel, 12),
+    AP_GROUPINFO("LIGHT_CH", 44, CFMotoDBW, _headlights_rc_channel, 0),
 
     // @Param: EW_CH
-    // @DisplayName: EW payload RC channel
-    // @Description: RC channel controlling relay 4. Above 1700 turns the EW payload on. The relay is forced off on failsafe.
+    // @DisplayName: Deprecated EW payload RC channel
+    // @Description: Deprecated because AUX4 is reserved for differential lock. This parameter has no effect.
     // @Range: 0 16
     // @User: Standard
-    AP_GROUPINFO("EW_CH", 45, CFMotoDBW, _ew_rc_channel, 9),
+    AP_GROUPINFO("EW_CH", 45, CFMotoDBW, _ew_rc_channel, 0),
 
     // @Param: GIN_P
     // @DisplayName: Gear selector Park input PWM
@@ -663,15 +663,8 @@ bool CFMotoDBW::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
     }
     if ((_fourwd_rc_channel.get() != 0 || _diff_lock_rc_channel.get() != 0)) {
         AP_Relay *relay = AP::relay();
-        if (relay == nullptr || !relay->enabled(4) || !relay->enabled(5)) {
-            hal.util->snprintf(failure_msg, failure_msg_len, "driveline relays missing");
-            return false;
-        }
-    }
-    if (_headlights_rc_channel.get() != 0 || _ew_rc_channel.get() != 0) {
-        AP_Relay *relay = AP::relay();
         if (relay == nullptr || !relay->enabled(2) || !relay->enabled(3)) {
-            hal.util->snprintf(failure_msg, failure_msg_len, "accessory relays missing");
+            hal.util->snprintf(failure_msg, failure_msg_len, "driveline relays missing");
             return false;
         }
     }
@@ -1094,23 +1087,19 @@ void CFMotoDBW::update_driveline(bool failsafe, bool throttle_is_neutral, float 
 
     if (_fourwd_rc_channel.get() != 0) {
         _fourwd_enabled = rc_switch_high(_fourwd_rc_channel);
-        set_relay(5, _fourwd_enabled);
+        set_relay(2, _fourwd_enabled);
     }
     if (_diff_lock_rc_channel.get() != 0) {
         _diff_lock_enabled = _fourwd_enabled && rc_switch_high(_diff_lock_rc_channel);
-        set_relay(4, _diff_lock_enabled);
+        set_relay(3, _diff_lock_enabled);
     }
 }
 
 void CFMotoDBW::update_accessories(bool failsafe)
 {
-    if (failsafe) {
-        set_relay(2, false);
-        set_relay(3, false);
-        return;
-    }
-    set_relay(2, _headlights_rc_channel.get() != 0 && rc_switch_high(_headlights_rc_channel));
-    set_relay(3, _ew_rc_channel.get() != 0 && rc_switch_high(_ew_rc_channel));
+    // AUX3/AUX4 are reserved for the driveline. Keep this compatibility hook
+    // inert so parameters stored by older firmware cannot drive those relays.
+    (void)failsafe;
 }
 
 void CFMotoDBW::write_outputs(const Outputs &outputs) const

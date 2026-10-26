@@ -36,11 +36,11 @@ MAUL_ENG_RETRY_D,2000
 MAUL_ENG_RETRIES,0
 
 # Boxer switches: SC drives 2x2/4x4/differential lock through CH7/CH10,
-# SB/CH12 controls headlights, and SE/CH9 controls the EW payload.
+# with 4WD on AUX3 and differential lock on AUX4.
 MAUL_4WD_CH,7
 MAUL_DIFF_CH,10
-MAUL_LIGHT_CH,12
-MAUL_EW_CH,9
+MAUL_LIGHT_CH,0
+MAUL_EW_CH,0
 MAUL_AXLE_SPD,0.2
 MAUL_AXLE_RPM_I,0
 MAUL_AXLE_RPM,500
@@ -83,22 +83,22 @@ SERVO_RATE,50
 RCMAP_ROLL,4
 RCMAP_THROTTLE,2
 
-# Six vehicle relays, all default OFF.
-# 1 ignition; 2 starter; 3 headlights; 4 EW payload;
-# 5 differential lock; 6 four-wheel drive.
+# Four vehicle relays, all default OFF.
+# 1 ignition/MAIN5; 2 starter/MAIN6; 3 four-wheel drive/AUX3;
+# 4 differential lock/AUX4. Relays 5 and 6 are disabled.
 # Their shared servo functions must stay disabled so the GPIOs are not driven
 # simultaneously by SRV_Channel and AP_Relay.
 SERVO5_FUNCTION,-1
 SERVO6_FUNCTION,-1
-SERVO9_FUNCTION,-1
-SERVO10_FUNCTION,-1
+SERVO9_FUNCTION,0
+SERVO10_FUNCTION,0
 SERVO11_FUNCTION,-1
 SERVO12_FUNCTION,-1
 RELAY1_FUNCTION,1
-RELAY1_PIN,50
+RELAY1_PIN,105
 RELAY1_DEFAULT,0
 RELAY2_FUNCTION,1
-RELAY2_PIN,51
+RELAY2_PIN,106
 RELAY2_DEFAULT,0
 RELAY3_FUNCTION,1
 RELAY3_PIN,52
@@ -106,11 +106,11 @@ RELAY3_DEFAULT,0
 RELAY4_FUNCTION,1
 RELAY4_PIN,53
 RELAY4_DEFAULT,0
-RELAY5_FUNCTION,1
-RELAY5_PIN,105
+RELAY5_FUNCTION,0
+RELAY5_PIN,-1
 RELAY5_DEFAULT,0
-RELAY6_FUNCTION,1
-RELAY6_PIN,106
+RELAY6_FUNCTION,0
+RELAY6_PIN,-1
 RELAY6_DEFAULT,0
 
 # Recovered frequency inputs. AUX5/AUX6 must remain GPIO, not PWM outputs.

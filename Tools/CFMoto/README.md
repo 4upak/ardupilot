@@ -8,18 +8,18 @@ proof that a mechanism is safe to move.
 
 | Relay | Function | Pixhawk pin |
 |---:|---|---:|
-| 1 | ignition | 50 |
-| 2 | starter | 51 |
-| 3 | headlights | 52 |
-| 4 | electronic-warfare payload | 53 |
-| 5 | differential lock | 105 |
-| 6 | four-wheel drive | 106 |
+| 1 | ignition (MAIN5) | 105 |
+| 2 | starter (MAIN6) | 106 |
+| 3 | four-wheel drive (AUX3) | 52 |
+| 4 | differential lock (AUX4) | 53 |
+| 5 | disabled | -1 |
+| 6 | disabled | -1 |
 
 All relays default OFF.  Assign operator RC channels only after confirming the
 final transmitter layout.  Do not copy the legacy RC1/RC3 assignments: those
 channels are steering and throttle in the current Rover input map.
-Because the relay GPIOs share pins with MAIN5/6 and AUX1..4, keep
-`SERVO5/6_FUNCTION` and `SERVO9..12_FUNCTION` set to `-1`.
+Because the relay GPIOs share pins with MAIN5/6 and AUX3/4, keep
+`SERVO5/6_FUNCTION` and `SERVO11/12_FUNCTION` set to `-1`.
 
 ## Gearbox reference positions
 
@@ -49,14 +49,19 @@ stopped clears it through the same feedback check.
 Starting requires an armed vehicle, neutral throttle, stopped speed, P or N,
 valid gearbox feedback, and a configured engine RPM input. The starter has an
 ignition delay, maximum crank time, retry delay and retry limit; reaching the
-running RPM threshold releases it immediately. Keep the feature disabled
-until relay polarity and engine RPM identity are measured.
+running RPM threshold releases it immediately. Relay 1 is MAIN5 and relay 2 is
+MAIN6. Keep the feature disabled until relay polarity and engine RPM identity
+are measured.
 
-`MAUL_4WD_CH` and `MAUL_DIFF_CH` control relays 6 and 5 only while throttle,
+`MAUL_4WD_CH` and `MAUL_DIFF_CH` control relays 3 and 4 only while throttle,
 speed and optional RPM interlocks are safe. Differential lock is allowed only
 with 4WD enabled. Failsafe retains the existing driveline state instead of
 switching a loaded mechanism. The channels default to zero because the legacy
 RC1/RC3 assignments conflict with current Rover steering/throttle inputs.
+
+`MAUL_LIGHT_CH` and `MAUL_EW_CH` are retained only for parameter
+compatibility and no longer drive outputs because AUX3/AUX4 belong to the
+driveline.
 
 ## Frequency inputs
 
