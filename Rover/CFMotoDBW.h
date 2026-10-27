@@ -53,6 +53,7 @@ private:
     };
 
     enum class CalibrationPhase : uint8_t {
+        prepositioning,
         settling_start,
         sweeping,
         settling_end,

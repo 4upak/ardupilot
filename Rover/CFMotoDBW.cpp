@@ -1024,13 +1024,16 @@ void CFMotoDBW::publish_calibration() const
     const uint16_t minimum = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
     const uint16_t maximum = static_cast<uint16_t>(constrain_int16(_calibration_max_pwm.get(), PWM_MIN, PWM_MAX));
     const uint16_t span = maximum > minimum ? maximum - minimum : 1;
-    const uint8_t completed_legs = static_cast<uint8_t>((MAX(_calibration_cycle, 1) - 1) * 2 +
-                                                        (_calibration_direction < 0 ? 1 : 0));
-    const uint16_t leg_progress = _calibration_direction > 0 ?
-                                  static_cast<uint16_t>(constrain_int16(_calibration_pwm - minimum, 0, span)) :
-                                  static_cast<uint16_t>(constrain_int16(maximum - _calibration_pwm, 0, span));
-    const uint32_t progress = (static_cast<uint32_t>(completed_legs) * span + leg_progress) * 1000U /
-                              (static_cast<uint32_t>(CALIBRATION_CYCLES) * 2U * span);
+    uint32_t progress = 0;
+    if (_calibration_phase != CalibrationPhase::prepositioning) {
+        const uint8_t completed_legs = static_cast<uint8_t>((MAX(_calibration_cycle, 1) - 1) * 2 +
+                                                            (_calibration_direction < 0 ? 1 : 0));
+        const uint16_t leg_progress = _calibration_direction > 0 ?
+                                      static_cast<uint16_t>(constrain_int16(_calibration_pwm - minimum, 0, span)) :
+                                      static_cast<uint16_t>(constrain_int16(maximum - _calibration_pwm, 0, span));
+        progress = (static_cast<uint32_t>(completed_legs) * span + leg_progress) * 1000U /
+                   (static_cast<uint32_t>(CALIBRATION_CYCLES) * 2U * span);
+    }
     gcs().send_named_int("GC_PROG", static_cast<int32_t>(MIN(progress, 1000U)));
 
     static const char low_names[][8] {"GC_P_LO", "GC_R_LO", "GC_N_LO", "GC_H_LO", "GC_L_LO"};
@@ -1146,14 +1149,19 @@ void CFMotoDBW::reset_calibration_leg()
 
 void CFMotoDBW::start_calibration(uint32_t now_ms)
 {
+    uint16_t current_pwm = gear_pwm(_selected_gear);
+    if (!SRV_Channels::get_output_pwm(SRV_Channel::k_scripting3, current_pwm)) {
+        current_pwm = gear_pwm(_selected_gear);
+    }
+
     _calibration_state = CalibrationState::running;
-    _calibration_phase = CalibrationPhase::settling_start;
+    _calibration_phase = CalibrationPhase::prepositioning;
     _calibration_error = 0;
     _calibration_direction = 1;
     _calibration_cycle = 1;
-    _calibration_pwm = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
-    _calibration_hold_until_ms = now_ms + CALIBRATION_ENDPOINT_HOLD_MS;
-    _calibration_next_step_ms = _calibration_hold_until_ms;
+    _calibration_pwm = static_cast<uint16_t>(constrain_int16(current_pwm, PWM_MIN, PWM_MAX));
+    _calibration_hold_until_ms = 0;
+    _calibration_next_step_ms = now_ms;
     _calibration_last_sequence = _telemetry_sequence;
     _calibration_have_sequence = true;
     _calibration_forward_orientation = 0;
@@ -1373,6 +1381,32 @@ bool CFMotoDBW::update_calibration(bool armed, bool failsafe, bool throttle_is_n
     set_relay(2, false);
     set_relay(3, false);
 
+    const uint16_t minimum = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
+    const uint16_t step = static_cast<uint16_t>(constrain_int16(_calibration_step_pwm.get(), 1, 20));
+    const uint16_t period = static_cast<uint16_t>(constrain_int16(_calibration_period_ms.get(), 10, 500));
+
+    if (_calibration_phase == CalibrationPhase::prepositioning) {
+        if (now_ms < _calibration_next_step_ms) {
+            return true;
+        }
+        _calibration_next_step_ms = now_ms + period;
+        if (_calibration_pwm < minimum) {
+            _calibration_pwm = MIN(static_cast<uint16_t>(_calibration_pwm + step), minimum);
+        } else if (_calibration_pwm > minimum) {
+            _calibration_pwm = _calibration_pwm > minimum + step ?
+                               static_cast<uint16_t>(_calibration_pwm - step) : minimum;
+        }
+        if (_calibration_pwm == minimum) {
+            _calibration_phase = CalibrationPhase::settling_start;
+            _calibration_hold_until_ms = now_ms + CALIBRATION_ENDPOINT_HOLD_MS;
+            _calibration_next_step_ms = _calibration_hold_until_ms;
+            _calibration_last_sequence = _telemetry_sequence;
+            _calibration_have_sequence = true;
+            reset_calibration_leg();
+        }
+        return true;
+    }
+
     if (_calibration_phase == CalibrationPhase::settling_start) {
         if (now_ms >= _calibration_hold_until_ms) {
             _calibration_phase = CalibrationPhase::sweeping;
@@ -1399,10 +1433,7 @@ bool CFMotoDBW::update_calibration(bool armed, bool failsafe, bool throttle_is_n
     if (now_ms < _calibration_next_step_ms) {
         return true;
     }
-    const uint16_t minimum = static_cast<uint16_t>(constrain_int16(_calibration_min_pwm.get(), PWM_MIN, PWM_MAX));
     const uint16_t maximum = static_cast<uint16_t>(constrain_int16(_calibration_max_pwm.get(), PWM_MIN, PWM_MAX));
-    const uint16_t step = static_cast<uint16_t>(constrain_int16(_calibration_step_pwm.get(), 1, 20));
-    const uint16_t period = static_cast<uint16_t>(constrain_int16(_calibration_period_ms.get(), 10, 500));
     _calibration_next_step_ms = now_ms + period;
 
     if (_calibration_direction > 0) {
