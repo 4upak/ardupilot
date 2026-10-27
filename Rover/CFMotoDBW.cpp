@@ -1037,9 +1037,36 @@ void CFMotoDBW::publish_calibration() const
     static const char high_names[][8] {"GC_P_HI", "GC_R_HI", "GC_N_HI", "GC_H_HI", "GC_L_HI"};
     static const char pwm_names[][9] {"GC_P_PWM", "GC_R_PWM", "GC_N_PWM", "GC_H_PWM", "GC_L_PWM"};
     for (uint8_t i = 0; i < 5; i++) {
-        gcs().send_named_int(low_names[i], _calibration_mean_low[i]);
-        gcs().send_named_int(high_names[i], _calibration_mean_high[i]);
-        gcs().send_named_int(pwm_names[i], _calibration_candidate[i]);
+        uint32_t low_sum = _calibration_aggregate[i].low_sum[0] + _calibration_aggregate[i].low_sum[1];
+        uint32_t high_sum = _calibration_aggregate[i].high_sum[0] + _calibration_aggregate[i].high_sum[1];
+        uint16_t observation_count = static_cast<uint16_t>(_calibration_aggregate[i].count[0] +
+                                                           _calibration_aggregate[i].count[1]);
+
+        if (_calibration_state == CalibrationState::running) {
+            if (_calibration_leg_seen[i]) {
+                low_sum += _calibration_leg_intervals[i].low_pwm;
+                high_sum += _calibration_leg_intervals[i].high_pwm;
+                observation_count++;
+            } else if (gear_index(_calibration_active_gear) == i &&
+                       _calibration_active_interval.samples >= CALIBRATION_MIN_SAMPLES) {
+                low_sum += _calibration_active_interval.low_pwm;
+                high_sum += _calibration_active_interval.high_pwm;
+                observation_count++;
+            }
+        }
+
+        uint16_t live_low = _calibration_mean_low[i];
+        uint16_t live_high = _calibration_mean_high[i];
+        uint16_t live_candidate = _calibration_candidate[i];
+        if (_calibration_state == CalibrationState::running && observation_count > 0) {
+            live_low = static_cast<uint16_t>((low_sum + observation_count / 2U) / observation_count);
+            live_high = static_cast<uint16_t>((high_sum + observation_count / 2U) / observation_count);
+            live_candidate = static_cast<uint16_t>((static_cast<uint32_t>(live_low) + live_high + 1U) / 2U);
+        }
+
+        gcs().send_named_int(low_names[i], live_low);
+        gcs().send_named_int(high_names[i], live_high);
+        gcs().send_named_int(pwm_names[i], live_candidate);
     }
 }
 

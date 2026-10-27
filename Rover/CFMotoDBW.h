@@ -188,7 +188,7 @@ private:
     static constexpr uint8_t TELEMETRY_PACKET_ID = 0x23;
     static constexpr uint8_t TELEMETRY_PACKET_LENGTH = 24;
     static constexpr uint16_t TELEMETRY_PUBLISH_PERIOD_MS = 500;
-    static constexpr uint8_t CALIBRATION_CYCLES = 5;
+    static constexpr uint8_t CALIBRATION_CYCLES = 3;
     static constexpr uint16_t CALIBRATION_ENDPOINT_HOLD_MS = 1000;
     static constexpr uint8_t CALIBRATION_MIN_SAMPLES = 2;
 
