@@ -1104,6 +1104,9 @@ bool CFMotoDBW::calibration_engine_stopped() const
 bool CFMotoDBW::calibration_safety_ok(bool armed, bool failsafe, bool throttle_is_neutral,
                                       float ground_speed, int8_t &error) const
 {
+    // Calibration commands gas idle and brake hold directly, so the operator
+    // RC positions do not affect the gearbox sweep.
+    (void)throttle_is_neutral;
     error = 0;
     if (armed) {
         error = 1;
@@ -1113,8 +1116,6 @@ bool CFMotoDBW::calibration_safety_ok(bool armed, bool failsafe, bool throttle_i
         error = 3;
     } else if (!calibration_deadman()) {
         error = 4;
-    } else if (!throttle_is_neutral) {
-        error = 5;
     } else if (!isfinite(ground_speed) || fabsf(ground_speed) > MAX(_shift_speed_max.get(), 0.0f)) {
         error = 6;
     } else if (!telemetry_stream_fresh()) {
