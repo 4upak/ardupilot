@@ -846,6 +846,45 @@ CFMotoDBW::Gear CFMotoDBW::decode_gear(uint16_t dio) const
     return match_count == 1 ? match : Gear::unknown;
 }
 
+CFMotoDBW::Gear CFMotoDBW::resolve_telemetry_gear(Gear raw_gear)
+{
+    // The CFMOTO selector reports the same active-low D4 pattern for Reverse
+    // and for the mechanical gaps between N-H and H-L. Use the ordered
+    // P-R-N-H-L travel history to keep those gaps unknown instead of
+    // advertising a false Reverse. Ambiguous data must remain unknown so
+    // propulsion stays inhibited.
+    Gear resolved = raw_gear;
+    if (raw_gear == Gear::reverse) {
+        switch (_telemetry_last_stable_gear) {
+        case Gear::park:
+        case Gear::reverse:
+            resolved = Gear::reverse;
+            break;
+        case Gear::neutral:
+            resolved = _telemetry_travel_direction < 0 ? Gear::reverse : Gear::unknown;
+            break;
+        case Gear::high:
+        case Gear::low:
+        case Gear::unknown:
+            resolved = Gear::unknown;
+            break;
+        }
+    }
+
+    if (resolved != Gear::unknown && resolved != _telemetry_last_stable_gear) {
+        const int8_t previous = gear_code(_telemetry_last_stable_gear);
+        const int8_t current = gear_code(resolved);
+        if (previous >= 0 && current >= 0) {
+            const int8_t delta = current - previous;
+            _telemetry_travel_direction = delta == 1 ? 1 : (delta == -1 ? -1 : 0);
+        } else {
+            _telemetry_travel_direction = 0;
+        }
+        _telemetry_last_stable_gear = resolved;
+    }
+    return resolved;
+}
+
 int8_t CFMotoDBW::gear_code(Gear gear)
 {
     switch (gear) {
@@ -970,6 +1009,11 @@ void CFMotoDBW::parse_telemetry_byte(uint8_t byte)
 
 void CFMotoDBW::accept_telemetry_packet()
 {
+    if (!telemetry_stream_fresh()) {
+        _telemetry_last_stable_gear = Gear::unknown;
+        _telemetry_travel_direction = 0;
+    }
+
     _telemetry_dio = static_cast<uint16_t>(_telemetry_buffer[2]) |
                      static_cast<uint16_t>(_telemetry_buffer[3]) << 8;
     _telemetry_previous_dio = static_cast<uint16_t>(_telemetry_buffer[4]) |
@@ -982,7 +1026,8 @@ void CFMotoDBW::accept_telemetry_packet()
     _telemetry_nano_rx_count = static_cast<uint16_t>(_telemetry_buffer[20]) |
                                static_cast<uint16_t>(_telemetry_buffer[21]) << 8;
     _telemetry_sequence = _telemetry_buffer[22];
-    _telemetry_gear = decode_gear(_telemetry_dio);
+    _telemetry_raw_gear = decode_gear(_telemetry_dio);
+    _telemetry_gear = resolve_telemetry_gear(_telemetry_raw_gear);
     _last_telemetry_ms = AP_HAL::millis();
     _telemetry_valid_packets++;
 }
@@ -991,8 +1036,9 @@ void CFMotoDBW::publish_telemetry(uint32_t now_ms)
 {
     const int32_t age_ms = _last_telemetry_ms == 0 ? -1 :
                            static_cast<int32_t>(now_ms - _last_telemetry_ms);
-    gcs().send_named_int("GB_HEALTH", telemetry_healthy() ? 1 : 0);
+    gcs().send_named_int("GB_HEALTH", telemetry_stream_fresh() ? 1 : 0);
     gcs().send_named_int("GB_GEAR", gear_code(_telemetry_gear));
+    gcs().send_named_int("GB_RAW", gear_code(_telemetry_raw_gear));
     gcs().send_named_int("GB_DIO", _telemetry_dio);
     gcs().send_named_int("GB_PREV", _telemetry_previous_dio);
     const char names[][6] {"GB_A0", "GB_A1", "GB_A2", "GB_A3", "GB_A4", "GB_A5", "GB_A6"};

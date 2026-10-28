@@ -143,6 +143,9 @@ private:
     ShiftState _shift_state = ShiftState::steady;
     EngineState _engine_state = EngineState::off;
     Gear _telemetry_gear = Gear::unknown;
+    Gear _telemetry_raw_gear = Gear::unknown;
+    Gear _telemetry_last_stable_gear = Gear::unknown;
+    int8_t _telemetry_travel_direction = 0;
     AP_HAL::UARTDriver *_telemetry_uart = nullptr;
     uint32_t _last_telemetry_ms = 0;
     uint8_t _telemetry_buffer[24]{};
@@ -211,6 +214,7 @@ private:
     [[nodiscard]] bool shift_timed_out(uint32_t now_ms) const;
     [[nodiscard]] bool shift_requires_neutral(Gear from, Gear to) const;
     [[nodiscard]] Gear decode_gear(uint16_t dio) const;
+    [[nodiscard]] Gear resolve_telemetry_gear(Gear raw_gear);
     [[nodiscard]] static int8_t gear_code(Gear gear);
     [[nodiscard]] static uint8_t gear_index(Gear gear);
     [[nodiscard]] Outputs safe_outputs() const;
